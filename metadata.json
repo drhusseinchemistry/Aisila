@@ -1,0 +1,7 @@
+{
+  "name": "ئەسیلە چێکرن",
+  "description": "An AI-powered application to create professional, modern Exam Papers (Asila) with automatic pagination, AI image generation, and intelligent question formatting.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

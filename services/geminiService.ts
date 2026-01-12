@@ -10,10 +10,13 @@ const SYSTEM_PROMPT_CORE = `
 یاسایێن گرنگ بۆ رێکخستنێ:
 1. **داهێنان (Originality):** هەرگیز دەقێ کتێبێ وەک خۆ کۆپی نەکە. مژاران وەربگرە و پسیارێن نوو دروست بکە.
 2. **شێوازێ نڤیسینێ:** پسیاران ب زمانەکێ کوردی (بادینی) یێ فەرمی و زانستی بنڤیسە.
-3. **بیرکاری و LaTeX:** بۆ هەر هاوکێشەکا بیرکاری، سیمبول، یان ژمارەیەکا حیسابی، تنێ تاکە دۆلار $...$ بکاربینە. 
-   - بۆ نموونە: $f(x) = \log_b x$ یان $x = 25$.
-   - **تێبینی زۆر گرنگ:** هەرگیز هێمای دۆلار بۆ کارەکتەرێن ئاسایی بکارنەهێنە. هەرگیز باک-سلاش \\ ل پێش دۆلارێ \\$ دانەنێ چونکی خەلەتی دکەڤیتە نڤیسینێ.
-   - هەرگیز دۆلارا دووبارە $$...$$ بکارنەهێنە.
+3. **بیرکاری و LaTeX (زۆر گرنگ):** 
+   - بۆ هاوکێشەیێن ئاسایی (Inline) نیشانەی $...$ بکاربینە. نموونە: $x + y = 10$.
+   - بۆ هاوکێشەیێن ئاڵۆز وەک کەرت (Fractions)، ڕەگ، و تەواوکاری، نیشانەی $$...$$ بکاربینە تاوەکو جوان دەربکەون.
+   - نموونە بۆ کەرت: $$\\frac{x^2 + 1}{x - 1}$$
+   - **JSON Escaping:** لەبەر ئەوەی ئەنجامەکە JSON ە، هەر Backslash ێک دەبێت دووجار بنوسرێت ("\\\\") بۆ ئەوەی لە کۆتاییدا یەک دانە ("\\") دەربچێت.
+   - نموونە: "\\\\frac{1}{2}" (راست) | "\\frac{1}{2}" (هەڵە - تێکدەچێت).
+   - هەرگیز پیتی کوردی تێکەلی هاوکێشەی LaTeX نەکە.
 4. **هەلبژارتن (Choices):** هەلبژارتن پێدڤیە ب ڤی رێزبەندیێ بن:
    أ) [بژاردە]
    ب) [بژاردە]
@@ -58,7 +61,7 @@ export const generateQuestionsFromImages = async (base64Images: string[], style:
 export const processTextToSections = async (text: string) => {
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `${SYSTEM_PROMPT_CORE}\n\nئەڤێ نڤیسینێ وەکی مژار بکاربینە و پسیارێن نوو و رێکخستی ژێ دروست بکە: \n\n ${text}`,
+    contents: `${SYSTEM_PROMPT_CORE}\n\nئەڤێ نڤیسینێ وەکی مژار بکاربینە و پسیارێن نوو و رێکخستی ژێ دروست بکە (تکایە دڵنیابە لە نوسینی LaTeX بۆ بیرکاری بە شێوەیەکێ دروست): \n\n ${text}`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -99,7 +102,7 @@ export const chatWithAI = async (question: string) => {
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: question,
-    config: { systemInstruction: "Tu مامۆستایەکی شارەزای، پسیارێن تاقیکردنێ (Original & Professional) دروست دکەی ب زمانی کوردی (بادینی)." }
+    config: { systemInstruction: "Tu مامۆستایەکی شارەزای، پسیارێن تاقیکردنێ (Original & Professional) دروست دکەی ب زمانی کوردی (بادینی). بۆ بیرکاری LaTeX بکاربینە." }
   });
   return response.text;
 };

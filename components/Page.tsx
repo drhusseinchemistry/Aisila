@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { EditorSettings, PaperSize, MalzamaSection, FloatingImage } from '../types';
 
 interface PageProps {
@@ -10,6 +10,38 @@ interface PageProps {
   onImageResize: (id: string, w: number, h: number) => void;
 }
 
+// Helper component to render individual math expressions safely
+const LatexRenderer: React.FC<{ latex: string; displayMode: boolean }> = ({ latex, displayMode }) => {
+  const containerRef = useRef<HTMLSpanElement>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (containerRef.current && (window as any).katex) {
+      try {
+        (window as any).katex.render(latex, containerRef.current, {
+          throwOnError: true, // We catch it below
+          displayMode: displayMode,
+          strict: false,
+          trust: true,
+          output: 'html' // Render html only for speed/compatibility
+        });
+        setError(false);
+      } catch (err) {
+        // Specifically handle Quirks Mode or Parse Errors by showing raw text
+        console.warn("KaTeX render error (likely quirks mode or malformed latex):", err);
+        setError(true);
+      }
+    }
+  }, [latex, displayMode]);
+
+  if (error) {
+    // Fallback: Show the LaTeX code nicely if rendering fails
+    return <span className="font-mono text-sm text-gray-600 bg-gray-100 px-1 rounded mx-1" dir="ltr">{displayMode ? `$$${latex}$$` : `$${latex}$`}</span>;
+  }
+
+  return <span ref={containerRef} className={displayMode ? "block my-2 text-center" : "inline-block mx-1"} dir="ltr" />;
+};
+
 const Page: React.FC<PageProps> = ({ 
   index, 
   sections, 
@@ -18,38 +50,6 @@ const Page: React.FC<PageProps> = ({
   onImageMove,
   onImageResize
 }) => {
-  const pageRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // Check for quirks mode explicitly
-    if (document.compatMode !== "CSS1Compat") {
-        console.warn("KaTeX Warning: Document is in Quirks Mode. Rendering might fail. Ensure <!DOCTYPE html> is at the very top.");
-    }
-
-    const renderMath = () => {
-      if (pageRef.current && (window as any).renderMathInElement) {
-        try {
-          (window as any).renderMathInElement(pageRef.current, {
-            delimiters: [
-              {left: '$$', right: '$$', display: true},
-              {left: '$', right: '$', display: false}
-            ],
-            throwOnError: false,
-            errorColor: '#f43f5e',
-            trust: true,
-            strict: false // Less strict to avoid crashing on minor errors
-          });
-        } catch (e) {
-          console.error("KaTeX Auto-render failed:", e);
-        }
-      }
-    };
-
-    // Use a small delay to ensure DOM is fully ready and stable to avoid "Quirks Mode" perception errors
-    const timeout = setTimeout(renderMath, 50);
-    return () => clearTimeout(timeout);
-  }, [sections]);
-
   const getPageStyle = () => {
     switch(settings.paperSize) {
       case PaperSize.A5: return 'w-[148mm] h-[210mm]';
@@ -64,62 +64,91 @@ const Page: React.FC<PageProps> = ({
     direction: 'rtl' as const
   };
 
-  // Robust LaTeX sanitization logic
   const sanitizeLatex = (text: string) => {
     if (!text) return "";
     let sanitized = text;
-
-    // 1. Fix escaped dollars (e.g., \$ -> $) which often break KaTeX delimiters
+    // Fix escaped dollars
     sanitized = sanitized.replace(/\\(\$)/g, '$1');
-
-    // 2. Fix malformed triple/double delimiters at ends
-    sanitized = sanitized.replace(/([^\$])\$\$(?!\$)/g, '$1$');
-    sanitized = sanitized.replace(/([^\$])\$\$\$(?!\$)/g, '$1$');
-
-    // 3. Simple balancing check for $ characters
-    const dollarCount = (sanitized.match(/\$/g) || []).length;
-    if (dollarCount % 2 !== 0) {
-        // If odd number, try to close it at the end
-        sanitized += "$";
-    }
-
-    // 4. Clean up spaces around dollar signs if needed (KaTeX prefers no space after opening $)
-    sanitized = sanitized.replace(/\$\s+/g, '$');
-    sanitized = sanitized.replace(/\s+\$/g, '$');
-
+    // Ensure backslashes are single for KaTeX processing if they came in double from JSON
+    // But usually JSON parser handles this. We focus on delimiters.
     return sanitized;
+  };
+
+  // Custom parser to split text and math
+  const parseAndRender = (text: string) => {
+    if (!text) return null;
+    
+    // Regex to capture:
+    // 1. Block math: $$...$$ or \[...\]
+    // 2. Inline math: $...$ or \(...\)
+    const regex = /(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\])|(\$[^\$\n]+?\$|\\\([^\n]+?\\\))/g;
+    
+    const parts = text.split(regex);
+    
+    return parts.map((part, i) => {
+        if (!part) return null;
+
+        // Check for Block Math
+        if ((part.startsWith('$$') && part.endsWith('$$')) || (part.startsWith('\\[') && part.endsWith('\\]'))) {
+            const content = part.startsWith('$$') ? part.slice(2, -2) : part.slice(2, -2);
+            return <LatexRenderer key={i} latex={content} displayMode={true} />;
+        }
+        
+        // Check for Inline Math
+        if ((part.startsWith('$') && part.endsWith('$')) || (part.startsWith('\\(') && part.endsWith('\\)'))) {
+            const content = part.startsWith('$') ? part.slice(1, -1) : part.slice(2, -2);
+            return <LatexRenderer key={i} latex={content} displayMode={false} />;
+        }
+
+        // Plain text
+        return <span key={i}>{part}</span>;
+    });
   };
 
   const formatContent = (content: string) => {
     if (!content) return null;
     
-    // Sanitize first to fix formatting issues
     const sanitized = sanitizeLatex(content);
     
-    // Check for choice labels (Kurmanji/Sorani labels)
+    // Check for choice labels
     const choiceLabels = sanitized.match(/[أبجد]\)/g);
     
     if (!choiceLabels) {
-        return <div className="whitespace-pre-wrap">{sanitized}</div>;
+        return <div className="whitespace-pre-wrap text-justify leading-relaxed">{parseAndRender(sanitized)}</div>;
     }
 
-    // Separate question text from the choices
-    // We split by the first label found
     const firstLabel = choiceLabels[0];
     const questionPart = sanitized.split(firstLabel)[0].trim();
-    
-    // Re-extract everything after the first label and split manually to be safe
     const rest = sanitized.substring(sanitized.indexOf(firstLabel));
-    const choiceTexts = rest.split(/[أبجد]\)/).filter(t => t.trim() !== "").map(t => t.trim());
+    
+    // More robust splitting for choices
+    const choiceParts: string[] = [];
+    let currentRest = rest;
+    
+    choiceLabels.forEach((label, idx) => {
+       const nextLabel = choiceLabels[idx + 1];
+       let choiceText = "";
+       
+       const labelIndex = currentRest.indexOf(label);
+       
+       if (nextLabel) {
+           const nextLabelIndex = currentRest.indexOf(nextLabel);
+           choiceText = currentRest.substring(labelIndex + label.length, nextLabelIndex).trim();
+       } else {
+           choiceText = currentRest.substring(labelIndex + label.length).trim();
+       }
+       
+       choiceParts.push(choiceText);
+    });
 
     return (
       <div className="flex flex-col w-full">
-        <div className="mb-4 leading-relaxed">{questionPart}</div>
+        <div className="mb-4 leading-relaxed text-justify">{parseAndRender(questionPart)}</div>
         <div className="grid grid-cols-2 gap-x-12 gap-y-2 w-full mt-2">
           {choiceLabels.map((label, i) => (
-            <div key={i} className="flex items-center gap-3 border-r-4 border-transparent hover:border-slate-100 pr-2 transition-all" style={{ marginBottom: `${settings.choiceSpacing}px` }}>
-              <span className="font-black text-blue-600/60 bg-blue-50 w-8 h-8 rounded-lg flex items-center justify-center text-sm">{label.replace(')', '')}</span>
-              <span className="text-slate-800">{choiceTexts[i] || '...'}</span>
+            <div key={i} className="flex items-start gap-3 border-r-4 border-transparent hover:border-slate-100 pr-2 transition-all" style={{ marginBottom: `${settings.choiceSpacing}px` }}>
+              <span className="font-black text-blue-600/60 bg-blue-50 w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0 mt-1">{label.replace(')', '')}</span>
+              <span className="text-slate-800 pt-1 leading-relaxed">{parseAndRender(choiceParts[i] || '')}</span>
             </div>
           ))}
         </div>
@@ -129,15 +158,12 @@ const Page: React.FC<PageProps> = ({
 
   return (
     <div 
-      ref={pageRef}
       className={`relative bg-white page-shadow mx-auto mb-12 overflow-hidden flex flex-col page-break ${getPageStyle()}`}
       style={fontStyle}
     >
-      {/* Aesthetic Borders */}
       <div className="absolute inset-6 border-[1px] pointer-events-none opacity-10 z-0" style={{ borderColor: settings.primaryColor }} />
       <div className="absolute inset-8 border-[3px] pointer-events-none opacity-20 z-0" style={{ borderColor: settings.primaryColor }} />
 
-      {/* Header */}
       <div className="absolute top-10 left-12 right-12 flex justify-between items-end z-10 border-b-2 pb-6" style={{ borderColor: settings.primaryColor + '15' }}>
          <div className="flex flex-col items-start gap-1">
             <div className="text-[9px] font-black uppercase tracking-[0.2em] opacity-40">KRG Ministry of Education</div>
@@ -167,13 +193,13 @@ const Page: React.FC<PageProps> = ({
                  >
                   {idx + 1}
                 </div>
-                 <div className="flex-1">
+                 <div className="flex-1 w-full">
                    <div 
                     style={{ 
                       fontSize: `${settings.fontSize}px`, 
                       lineHeight: settings.lineHeight,
                     }}
-                    className="text-slate-900 font-bold"
+                    className="text-slate-900 font-bold w-full"
                   >
                     {formatContent(section.content)}
                   </div>
@@ -189,7 +215,6 @@ const Page: React.FC<PageProps> = ({
           ))}
         </div>
 
-        {/* Floating Images */}
         {floatingImages.filter(img => img.pageIndex === index).map(img => (
           <div
             key={img.id}
@@ -225,7 +250,6 @@ const Page: React.FC<PageProps> = ({
         ))}
       </div>
 
-      {/* Footer */}
       <div className="h-24 px-16 flex items-center justify-between mt-auto mx-12 border-t" style={{ borderColor: settings.primaryColor + '08' }}>
         <div className="flex items-center gap-4">
            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: settings.primaryColor }}></div>

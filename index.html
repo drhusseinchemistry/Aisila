@@ -11,7 +11,7 @@
     <!-- KaTeX for Math/LaTeX -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <!-- auto-render removed as we handle it manually in React now -->
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -31,7 +31,8 @@
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
         /* KaTeX Adjustments */
-        .katex { font-size: 1.1em; }
+        .katex { font-size: 1.1em; direction: ltr; unicode-bidi: embed; }
+        .katex-display { margin: 1em 0; overflow-x: auto; overflow-y: hidden; }
 
         @media print {
             @page {

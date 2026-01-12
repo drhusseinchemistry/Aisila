@@ -8,12 +8,19 @@ const App: React.FC = () => {
   const [sections, setSections] = useState<MalzamaSection[]>([]);
   const [pages, setPages] = useState<{flow: MalzamaSection[]}[]>([]);
   const [floatingElements, setFloatingElements] = useState<FloatingElement[]>([]);
+  const [history, setHistory] = useState<FloatingElement[][]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  
   const [loading, setLoading] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [showChat, setShowChat] = useState(false);
   const [chatHistory, setChatHistory] = useState<{role: 'user'|'ai', text: string}[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Toolbar State
+  const [activeTool, setActiveTool] = useState('select'); // 'select', 'pen', 'highlighter'
+  const [toolSettings, setToolSettings] = useState({ color: '#FFD700', width: 5, opacity: 1 });
+
   // PDF States
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [pdfInfo, setPdfInfo] = useState<{ fileName: string, totalPages: number } | null>(null);
@@ -33,31 +40,64 @@ const App: React.FC = () => {
     questionGap: 30
   });
 
-  // Calculate current active page based on scroll (basic estimation)
   const [activePageIndex, setActivePageIndex] = useState(0);
+
+  // --- History Management ---
+  const pushToHistory = (newElements: FloatingElement[]) => {
+      const newHistory = history.slice(0, historyIndex + 1);
+      newHistory.push(newElements);
+      setHistory(newHistory);
+      setHistoryIndex(newHistory.length - 1);
+  };
+
+  const undo = () => {
+      if (historyIndex > 0) {
+          setHistoryIndex(historyIndex - 1);
+          setFloatingElements(history[historyIndex - 1]);
+      } else if (historyIndex === 0) {
+          setHistoryIndex(-1);
+          setFloatingElements([]);
+      }
+  };
+
+  const redo = () => {
+      if (historyIndex < history.length - 1) {
+          setHistoryIndex(historyIndex + 1);
+          setFloatingElements(history[historyIndex + 1]);
+      }
+  };
+
+  // Helper to wrap state updates with history
+  const updateElements = (newElements: FloatingElement[]) => {
+      setFloatingElements(newElements);
+      pushToHistory(newElements);
+  };
 
   // --- Helpers for Elements ---
 
   const addElement = (type: FloatingElement['type'], content?: string, src?: string) => {
+    // Reset tool to select after adding fixed shapes (except pen which stays active)
+    if (type !== 'path') setActiveTool('select');
+
     const newEl: FloatingElement = {
         id: Math.random().toString(),
         type,
         x: 100,
         y: 200,
         width: type === 'line' ? 200 : (type === 'text' ? 300 : 150),
-        height: type === 'line' ? 20 : 150,
-        pageIndex: activePageIndex, // Add to CURRENTLY viewed page
+        height: type === 'line' ? toolSettings.width : 150,
+        pageIndex: activePageIndex,
         content: content || (type === 'text' ? 'نڤیسین لێرە...' : undefined),
         src,
         style: {
-            borderColor: '#000000',
-            borderWidth: 2,
+            borderColor: toolSettings.color,
+            borderWidth: toolSettings.width,
             backgroundColor: 'transparent',
-            color: '#000000',
+            color: toolSettings.color,
             fontSize: settings.fontSize
         }
     };
-    setFloatingElements(prev => [...prev, newEl]);
+    updateElements([...floatingElements, newEl]);
   };
 
   const handleElementMove = (id: string, x: number, y: number) => {
@@ -72,10 +112,15 @@ const App: React.FC = () => {
   const handleElementStyleUpdate = (id: string, style: any) => {
       setFloatingElements(prev => prev.map(el => el.id === id ? { ...el, style: { ...el.style, ...style } } : el));
   };
+  const handleDeleteElement = (id: string) => {
+      updateElements(floatingElements.filter(el => el.id !== id));
+  };
+  const handleAddFreehandElement = (el: FloatingElement) => {
+      updateElements([...floatingElements, el]);
+  };
 
-  // --- PDF & AI Handlers (Simplified for brevity as they are mostly unchanged logic) ---
+  // --- PDF & AI Handlers ---
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      // ... same logic as before ...
        const file = e.target.files?.[0];
     if (!file) return;
 
@@ -123,7 +168,6 @@ const App: React.FC = () => {
     
     try {
       const base64Pages: string[] = [];
-      
       if (pdfDoc.isImage) {
         base64Pages.push(pdfDoc.base64);
       } else {
@@ -146,7 +190,6 @@ const App: React.FC = () => {
 
       setUploadProgress(60);
       const { sections: newSections } = await generateQuestionsFromImages(base64Pages, pdfStyle);
-      
       if (newSections && newSections.length > 0) {
         setSections(prev => [...prev, ...newSections]);
       } else {
@@ -161,7 +204,7 @@ const App: React.FC = () => {
     }
   };
 
-  // Pagination for Flow Sections Only
+  // Pagination
   useEffect(() => {
     const charsPerPage = settings.paperSize === PaperSize.A4 ? 1800 : 1600;
     const result: {flow: MalzamaSection[]}[] = [];
@@ -181,12 +224,10 @@ const App: React.FC = () => {
     });
     if (currentFlowPage.length > 0) result.push({ flow: currentFlowPage });
     
-    // Ensure we have at least one page if elements exist
     const maxElemPage = Math.max(...floatingElements.map(e => e.pageIndex), 0);
     while (result.length <= maxElemPage) {
         result.push({ flow: [] });
     }
-    
     setPages(result);
   }, [sections, settings, floatingElements]);
 
@@ -201,7 +242,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    <div className="flex h-screen overflow-hidden bg-slate-900">
       <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={(e) => {
           const file = e.target.files?.[0];
           if(file) {
@@ -231,40 +272,57 @@ const App: React.FC = () => {
         uploadProgress={uploadProgress}
       />
 
-      <div className="flex-1 flex flex-col h-full relative">
-          {/* Floating Toolbar for Adding Elements */}
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 bg-white/90 backdrop-blur shadow-xl rounded-full px-6 py-3 border flex items-center gap-4 no-print animate-in slide-in-from-top-4">
-              <span className="text-xs font-bold text-gray-400">زیادکردن:</span>
-              <button onClick={() => addElement('text')} className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg tooltip" title="Text Box">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-              </button>
-              <button onClick={() => fileInputRef.current?.click()} className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg" title="Image">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-              </button>
-              <div className="w-px h-6 bg-gray-200"></div>
-              <button onClick={() => addElement('rect')} className="p-2 hover:bg-blue-50 text-gray-600 rounded-lg border-2 border-gray-400 w-8 h-8 flex items-center justify-center"></button>
-              <button onClick={() => addElement('circle')} className="p-2 hover:bg-blue-50 text-gray-600 rounded-lg border-2 border-gray-400 rounded-full w-8 h-8 flex items-center justify-center"></button>
-              <button onClick={() => addElement('line')} className="p-2 hover:bg-blue-50 text-gray-600 rounded-lg flex items-center justify-center">
-                  <div className="w-5 h-0.5 bg-gray-600"></div>
-              </button>
-              <div className="w-px h-6 bg-gray-200"></div>
-              <button onClick={() => addElement('icon', 'check')} className="p-2 hover:bg-green-50 text-green-600 rounded-lg">✅</button>
-              <button onClick={() => addElement('icon', 'x')} className="p-2 hover:bg-red-50 text-red-600 rounded-lg">❌</button>
-              <button onClick={() => addElement('icon', 'star')} className="p-2 hover:bg-yellow-50 text-yellow-500 rounded-lg">⭐</button>
+      <div className="flex-1 flex flex-col h-full relative bg-gray-800">
+          {/* Main Toolbar */}
+          <div className="bg-gray-800 p-2 flex flex-col gap-2 items-center shadow-md z-50 no-print border-b border-gray-700">
+              
+              {/* Row 1: Actions */}
+              <div className="flex items-center gap-2">
+                 <button onClick={undo} disabled={historyIndex < 0} className="p-2 bg-gray-700 text-white rounded hover:bg-gray-600 disabled:opacity-50">↪️</button>
+                 <button onClick={redo} disabled={historyIndex >= history.length - 1} className="p-2 bg-gray-700 text-white rounded hover:bg-gray-600 disabled:opacity-50">↩️</button>
+                 <div className="w-px h-6 bg-gray-600 mx-2"></div>
+                 <button onClick={() => setSections(prev => [...prev, {id: Math.random().toString(), title: "New", content: "..."}])} className="p-2 bg-gray-700 text-white rounded hover:bg-gray-600" title="Add Page">📄+</button>
+                 <button onClick={() => window.print()} className="p-2 bg-blue-600 text-white rounded hover:bg-blue-500 font-bold" title="Save/Print">💾</button>
+              </div>
+
+              {/* Row 2: Tools */}
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                 <button onClick={() => setActiveTool('select')} className={`p-2 rounded ${activeTool === 'select' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`} title="Select/Hand">🖐️</button>
+                 <button onClick={() => { setActiveTool('pen'); }} className={`p-2 rounded ${activeTool === 'pen' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`} title="Pen">✏️</button>
+                 <button onClick={() => { setActiveTool('highlighter'); }} className={`p-2 rounded ${activeTool === 'highlighter' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`} title="Highlighter">🖍️</button>
+                 <div className="w-px h-6 bg-gray-600 mx-1"></div>
+                 <button onClick={() => addElement('text')} className="p-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600" title="Text">T</button>
+                 <button onClick={() => fileInputRef.current?.click()} className="p-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600" title="Image">🖼️</button>
+                 <div className="w-px h-6 bg-gray-600 mx-1"></div>
+                 <button onClick={() => addElement('rect')} className="p-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600" title="Rectangle">⬜</button>
+                 <button onClick={() => addElement('circle')} className="p-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600" title="Circle">⚪</button>
+                 <button onClick={() => addElement('line')} className="p-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600" title="Line">➖</button>
+                 <button onClick={() => addElement('line')} className="p-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 underline font-bold" title="Underline">U</button>
+              </div>
+
+              {/* Row 3: Properties */}
+              <div className="flex items-center gap-4 text-white text-sm">
+                  <div className="flex items-center gap-2">
+                      <span>ستووری:</span>
+                      <input type="range" min="1" max="20" value={toolSettings.width} onChange={(e) => setToolSettings({...toolSettings, width: parseInt(e.target.value)})} className="accent-blue-500" />
+                      <span>{toolSettings.width}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                      <span>رەنگ:</span>
+                      <input type="color" value={toolSettings.color} onChange={(e) => setToolSettings({...toolSettings, color: e.target.value})} className="bg-transparent border-none w-8 h-8 cursor-pointer" />
+                  </div>
+              </div>
           </div>
 
-          <main className="flex-1 overflow-y-auto p-12 relative no-scrollbar bg-slate-100/30" onScroll={(e) => {
-              // Simple logic to detect which page is in view to set activePageIndex
-              const pageHeight = 1123; // approx A4 pixel height @96dpi
+          <main className="flex-1 overflow-y-auto p-12 relative no-scrollbar bg-gray-800" onScroll={(e) => {
+              const pageHeight = 1123; 
               const scroll = e.currentTarget.scrollTop;
               setActivePageIndex(Math.floor((scroll + 300) / pageHeight));
           }}>
              {sections.length === 0 && !loading && floatingElements.length === 0 && (
-                /* Welcome Screen (Same as before) */
-                 <div className="max-w-4xl mx-auto mt-20 p-16 bg-white rounded-[60px] shadow-2xl border-4 border-white no-print text-center transform transition-all hover:scale-[1.01]">
+                 <div className="max-w-4xl mx-auto mt-20 p-16 bg-white rounded-[60px] shadow-2xl border-4 border-white no-print text-center">
                     <div className="w-24 h-24 bg-blue-600 rounded-[32px] mx-auto mb-10 flex items-center justify-center text-white text-5xl font-black shadow-2xl shadow-blue-200">A</div>
-                    <h2 className="text-5xl font-black text-gray-900 mb-6 tracking-tight">چێکرنا ئەسیلا ب شێوازەکێ نوی</h2>
-                    <p className="text-gray-400 mb-12 text-xl font-medium">پسیارێن خۆ بنڤیسە یان فایلەکێ PDF ئەپلۆد بکە بۆ دروستکرنا ئەسیلەیەکا فەرمی و جوان.</p>
+                    <h2 className="text-5xl font-black text-gray-900 mb-6 tracking-tight">چێکرنا ئەسیلا</h2>
                     <textarea 
                     className="w-full h-80 p-10 rounded-[40px] border-4 border-gray-50 focus:border-blue-500 focus:outline-none transition-all resize-none bg-gray-50/50 text-2xl leading-relaxed text-right font-bold placeholder:text-gray-200"
                     placeholder="پسیارێن خۆ ل ڤێرە بنڤیسە..."
@@ -294,26 +352,23 @@ const App: React.FC = () => {
                     key={i} 
                     index={i} 
                     sections={pageData.flow}
-                    floatingElements={floatingElements}
+                    floatingElements={floatingElements.filter(e => e.pageIndex === i)}
                     settings={settings} 
+                    activeTool={activeTool}
+                    toolSettings={toolSettings}
                     onElementMove={handleElementMove}
                     onElementResize={handleElementResize}
                     onElementUpdate={handleElementUpdate}
                     onElementStyleUpdate={handleElementStyleUpdate}
+                    onAddElement={handleAddFreehandElement}
+                    onDeleteElement={handleDeleteElement}
                     />
                 ))}
-             </div>
-             
-             {/* "Add New Page" Button (Implicitly handled by adding items to new index, but we can force it) */}
-             <div className="text-center pb-10 no-print">
-                 <button onClick={() => setSections(prev => [...prev, {id: Math.random().toString(), title: "New", content: "..."}])} className="bg-white px-6 py-2 rounded-full shadow border text-sm font-bold text-gray-500 hover:text-blue-600">+ Add Page / Question</button>
              </div>
           </main>
       </div>
       
-      {/* Chat Component (Same as before) */}
       {showChat && (
-        /* ... existing chat code ... */
          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/80 backdrop-blur-xl px-4 no-print">
             <div className="bg-white w-full max-w-3xl h-[850px] rounded-[60px] shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300 border-8 border-white">
                 <div className="p-10 bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex justify-between items-center">

@@ -5,7 +5,7 @@ export enum PaperSize {
   Letter = 'Letter'
 }
 
-export type ElementType = 'image' | 'text' | 'rect' | 'circle' | 'line' | 'icon';
+export type ElementType = 'image' | 'text' | 'rect' | 'circle' | 'line' | 'icon' | 'path';
 
 export interface FloatingElement {
   id: string;
@@ -17,12 +17,14 @@ export interface FloatingElement {
   content?: string; // For text html or icon name
   src?: string; // For images
   pageIndex: number;
+  pathData?: string; // For freehand drawing paths
   style?: {
     borderColor?: string;
     backgroundColor?: string;
     borderWidth?: number;
     color?: string; // For text/icon
     fontSize?: number;
+    opacity?: number;
   };
 }
 

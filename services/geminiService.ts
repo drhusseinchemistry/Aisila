@@ -1,23 +1,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Helper to initialize AI client lazily. 
-// We explicitly check localStorage and window.process to ensure the key is found 
-// even if the bundler replaces process.env.API_KEY with undefined.
 const getAI = () => {
   let apiKey = "";
-  
-  // 1. Try standard process.env (if defined/injected)
   if (typeof process !== "undefined" && process.env && process.env.API_KEY) {
     apiKey = process.env.API_KEY;
   }
-
-  // 2. Try window.process shim (from index.html)
   if (!apiKey && typeof window !== "undefined") {
     // @ts-ignore
     apiKey = window.process?.env?.API_KEY;
   }
-
-  // 3. Try localStorage directly (most reliable for this app)
   if (!apiKey && typeof window !== "undefined") {
     apiKey = localStorage.getItem('gemini_api_key') || "";
   }
@@ -25,30 +16,30 @@ const getAI = () => {
   if (!apiKey) {
     throw new Error("API Key نەهاتیە دیتن. تکایە ژ سایدباری Connect بکە.");
   }
-
   return new GoogleGenAI({ apiKey });
+};
+
+// Helper function to clean AI response
+const cleanAndParseJSON = (text: string) => {
+  try {
+    // Remove markdown code blocks if present (```json ... ```)
+    let cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanText);
+  } catch (e) {
+    console.error("JSON Parse Error:", e);
+    console.log("Raw Text:", text);
+    return { sections: [] }; // Return empty structure on failure to prevent crash
+  }
 };
 
 const SYSTEM_PROMPT_CORE = `
 تۆ مامۆستایەکی شارەزا و داهێنەری د دانانا ئەسیلەیان دا.
 ئەرکێ تە: دروستکردنا پسیارێن ئەزموونێ یە ب شێوازەکێ ئەکادیمی و "سەروبەر".
 
-یاسایێن گرنگ بۆ رێکخستنێ:
-1. **داهێنان (Originality):** هەرگیز دەقێ کتێبێ وەک خۆ کۆپی نەکە. مژاران وەربگرە و پسیارێن نوو دروست بکە.
-2. **شێوازێ نڤیسینێ:** پسیاران ب زمانەکێ کوردی (بادینی) یێ فەرمی و زانستی بنڤیسە.
-3. **بیرکاری و LaTeX (زۆر گرنگ):** 
-   - بۆ هاوکێشەیێن ئاسایی (Inline) نیشانەی $...$ بکاربینە. نموونە: $x + y = 10$.
-   - بۆ هاوکێشەیێن ئاڵۆز وەک کەرت (Fractions)، ڕەگ، و تەواوکاری، نیشانەی $$...$$ بکاربینە تاوەکو جوان دەربکەون.
-   - نموونە بۆ کەرت: $$\\frac{x^2 + 1}{x - 1}$$
-   - **JSON Escaping:** لەبەر ئەوەی ئەنجامەکە JSON ە، هەر Backslash ێک دەبێت دووجار بنوسرێت ("\\\\") بۆ ئەوەی لە کۆتاییدا یەک دانە ("\\") دەربچێت.
-   - نموونە: "\\\\frac{1}{2}" (راست) | "\\frac{1}{2}" (هەڵە - تێکدەچێت).
-   - هەرگیز پیتی کوردی تێکەلی هاوکێشەی LaTeX نەکە.
-4. **هەلبژارتن (Choices):** هەلبژارتن پێدڤیە ب ڤی رێزبەندیێ بن:
-   أ) [بژاردە]
-   ب) [بژاردە]
-   ج) [بژاردە]
-   د) [بژاردە]
-5. **سەروبەر:** پسیاران ب شێوەیەکێ رێک و پێک بنڤیسە، هەر پسیارەک بلا ژ یا دی جودا بیت.
+یاسایێن گرنگ:
+1. پسیاران ب زمانەکێ کوردی (بادینی) یێ فەرمی بنڤیسە.
+2. بۆ بیرکاری LaTeX ($...$) بکاربینە.
+3. JSON Escaping: هەر Backslash ێک دەبێت دووجار بنوسرێت ("\\\\").
 `;
 
 export const generateQuestionsFromImages = async (base64Images: string[], style: string) => {
@@ -82,14 +73,15 @@ export const generateQuestionsFromImages = async (base64Images: string[], style:
       }
     }
   });
-  return JSON.parse(response.text || '{"sections": []}');
+  
+  return cleanAndParseJSON(response.text || '{"sections": []}');
 };
 
 export const processTextToSections = async (text: string) => {
   const ai = getAI();
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
-    contents: `${SYSTEM_PROMPT_CORE}\n\nئەڤێ نڤیسینێ وەکی مژار بکاربینە و پسیارێن نوو و رێکخستی ژێ دروست بکە (تکایە دڵنیابە لە نوسینی LaTeX بۆ بیرکاری بە شێوەیەکێ دروست): \n\n ${text}`,
+    contents: `${SYSTEM_PROMPT_CORE}\n\nئەڤێ نڤیسینێ وەکی مژار بکاربینە و پسیارێن نوو و رێکخستی ژێ دروست بکە: \n\n ${text}`,
     config: {
       responseMimeType: "application/json",
       responseSchema: {
@@ -111,14 +103,14 @@ export const processTextToSections = async (text: string) => {
       }
     }
   });
-  return JSON.parse(response.text || '{"sections": []}');
+  return cleanAndParseJSON(response.text || '{"sections": []}');
 };
 
 export const generateExplanatoryImage = async (prompt: string) => {
   const ai = getAI();
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash-image',
-    contents: { parts: [{ text: `High quality academic illustration for examination: ${prompt}` }] },
+    contents: { parts: [{ text: `High quality academic illustration line art white background: ${prompt}` }] },
     config: { imageConfig: { aspectRatio: "1:1" } }
   });
   for (const part of response.candidates?.[0]?.content.parts || []) {

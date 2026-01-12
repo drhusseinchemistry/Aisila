@@ -5,26 +5,37 @@ export enum PaperSize {
   Letter = 'Letter'
 }
 
-export interface FloatingImage {
+export type ElementType = 'image' | 'text' | 'rect' | 'circle' | 'line' | 'icon';
+
+export interface FloatingElement {
   id: string;
-  src: string;
+  type: ElementType;
   x: number;
   y: number;
   width: number;
   height: number;
+  content?: string; // For text html or icon name
+  src?: string; // For images
   pageIndex: number;
+  style?: {
+    borderColor?: string;
+    backgroundColor?: string;
+    borderWidth?: number;
+    color?: string; // For text/icon
+    fontSize?: number;
+  };
 }
 
 export interface MalzamaSection {
   id: string;
   title: string;
-  content: string;
-  // New properties for floating text boxes
+  content: string; // Now stores HTML for rich text
   isFloating?: boolean;
   pageIndex?: number;
   x?: number;
   y?: number;
   width?: number;
+  height?: number; // Added height
 }
 
 export interface EditorSettings {

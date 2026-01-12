@@ -5,6 +5,25 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Modern Asila Creator - چێکرنا ئەسیلا</title>
+    
+    <!-- Global Error Handler to catch "White Screen" errors -->
+    <script>
+      window.addEventListener('error', function(event) {
+        const errorMsg = event.message || "Unknown Error";
+        const errorSrc = event.filename;
+        const errorLine = event.lineno;
+        // Only show if the root is empty (white screen)
+        if (!document.getElementById('root') || document.getElementById('root').innerHTML.trim() === '') {
+            document.body.innerHTML = '<div style="padding:20px; color:red; font-family:sans-serif; direction:ltr; text-align:left;">' +
+            '<h1>Application Error</h1>' +
+            '<p><strong>Error:</strong> ' + errorMsg + '</p>' +
+            '<p><strong>Source:</strong> ' + errorSrc + ':' + errorLine + '</p>' +
+            '<p>Please check the console for more details.</p>' +
+            '</div>';
+        }
+      });
+    </script>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
@@ -55,9 +74,11 @@
         }
     </style>
     <script>
+      // Process Polyfill for Environment Variables
       if (typeof process === "undefined") {
         window.process = { env: { API_KEY: "" } };
       }
+      // PDF.js Worker Configuration
       if (window.pdfjsLib) {
         window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
       }

@@ -19,6 +19,12 @@ export interface MalzamaSection {
   id: string;
   title: string;
   content: string;
+  // New properties for positioning
+  pageIndex?: number; // If set, it stays on this page and ignores flow
+  x?: number;         // Horizontal position
+  y?: number;         // Vertical position
+  width?: number;     // Width of the text box
+  isFloating?: boolean; // Determines if it's a draggable box or flow list
 }
 
 export interface EditorSettings {
@@ -29,6 +35,6 @@ export interface EditorSettings {
   lineHeight: number;
   teacherName: string;
   customFontUrl?: string;
-  choiceSpacing: number; // New: spacing between options
-  questionGap: number;   // New: spacing between questions
+  choiceSpacing: number; 
+  questionGap: number;   
 }

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { EditorSettings } from '../types';
 
 interface SidebarProps {
@@ -24,46 +24,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   pdfStatus, onPdfUpload, pdfRange, setPdfRange, onGenerateFromPdf, pdfStyle, setPdfStyle, uploadProgress
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [manualApiKey, setManualApiKey] = useState("");
-  const [isConnected, setIsConnected] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const imgInputRef = useRef<HTMLInputElement>(null);
   const fontInputRef = useRef<HTMLInputElement>(null);
-
-  // Check connection status on mount
-  useEffect(() => {
-    // @ts-ignore
-    const envKey = window.process?.env?.API_KEY;
-    const storedKey = localStorage.getItem('gemini_api_key');
-    // Consider connected if key exists in env or localstorage
-    if ((envKey && envKey.length > 5) || (storedKey && storedKey.length > 5)) {
-        setIsConnected(true);
-    }
-  }, []);
-
-  const saveManualKey = () => {
-      if (manualApiKey.trim().length > 10) {
-          const key = manualApiKey.trim();
-          localStorage.setItem('gemini_api_key', key);
-          // @ts-ignore
-          if (!window.process) window.process = { env: {} };
-          // @ts-ignore
-          window.process.env.API_KEY = key;
-          alert("پەیوەندی سەرکەوتوو بوو! (Connected Successfully)");
-          window.location.reload();
-      } else {
-          alert("تکایە کلیلێکی ڕاست بنووسە (Invalid API Key).");
-      }
-  };
-
-  const removeKey = () => {
-      if(confirm("ئایە دەتەوێت پەیوەندی بپچڕێنیت؟ (Disconnect)")) {
-          localStorage.removeItem('gemini_api_key');
-          // @ts-ignore
-          if (window.process && window.process.env) window.process.env.API_KEY = "";
-          window.location.reload();
-      }
-  };
 
   if (!isOpen) {
     return (
@@ -89,49 +52,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar">
         
-        {/* API CONNECTION SECTION */}
-        <section className={`p-5 rounded-[24px] border relative overflow-hidden group transition-all ${isConnected ? 'bg-green-50/50 border-green-200' : 'bg-slate-900 border-slate-800'}`}>
-          {!isConnected && (
-            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600 blur-[60px] opacity-20 pointer-events-none group-hover:opacity-30 transition-opacity"></div>
-          )}
-          
-          <div className="flex items-center justify-between mb-4 relative z-10">
-            <div className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500 shadow-[0_0_10px_#22c55e]' : 'bg-red-500 shadow-[0_0_10px_#ef4444] animate-pulse'}`}></div>
-                <h3 className={`text-xs font-black uppercase tracking-widest ${isConnected ? 'text-green-700' : 'text-slate-300'}`}>
-                    {isConnected ? 'Active Connection' : 'Google AI Status'}
-                </h3>
-            </div>
-            {isConnected ? 
-                <span className="text-[10px] bg-green-100 text-green-600 px-2 py-1 rounded-md font-bold">Connected</span> : 
-                <span className="text-[10px] text-red-500 font-bold">No Key</span>
-            }
-          </div>
-          
-          {!isConnected ? (
-            <div className="space-y-3 relative z-10 animate-in fade-in duration-300">
-               <div className="relative">
-                   <input 
-                     type="password" 
-                     value={manualApiKey}
-                     onChange={(e) => setManualApiKey(e.target.value)}
-                     placeholder="Paste Gemini API Key Here..."
-                     className="w-full bg-slate-800 border border-slate-700 text-white text-xs p-3 rounded-xl focus:outline-none focus:border-blue-500 placeholder-slate-500 font-mono"
-                   />
-               </div>
-               <button onClick={saveManualKey} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl text-xs font-black transition shadow-lg shadow-blue-900/50 flex items-center justify-center gap-2">
-                 Save & Connect
-               </button>
-            </div>
-          ) : (
-            <div className="relative z-10 space-y-3 animate-in fade-in duration-300">
-                <button onClick={removeKey} className="w-full bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 py-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-2">
-                    Disconnect (پچڕاندن)
-                </button>
-            </div>
-          )}
-        </section>
-
         {/* PDF SECTION */}
         <section className="bg-blue-50/50 p-5 rounded-[24px] border border-blue-100">
           <div className="flex items-center gap-3 mb-4">

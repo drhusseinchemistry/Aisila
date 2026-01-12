@@ -40,6 +40,7 @@
             background-color: #f8fafc;
             margin: 0;
             padding: 0;
+            touch-action: pan-y;
         }
         
         .page-shadow {
@@ -54,40 +55,49 @@
 
         @media print {
             @page {
-                size: A4 portrait;
                 margin: 0;
+                size: auto;
             }
-            body { background: white; margin: 0; padding: 0; }
+            html, body {
+                height: 100%;
+                overflow: visible !important;
+                background: white;
+            }
             body * { visibility: hidden; }
             #malzama-print-area, #malzama-print-area * { visibility: visible; }
-            #malzama-print-area { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; }
+            #malzama-print-area { 
+                position: absolute; 
+                left: 0; 
+                top: 0; 
+                width: 100%; 
+                margin: 0; 
+                padding: 0;
+            }
             .no-print { display: none !important; }
             * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
             .page-break {
                 break-after: page !important;
+                break-inside: avoid !important;
                 page-break-after: always !important;
                 margin-bottom: 0 !important;
                 box-shadow: none !important;
-                height: 297mm !important;
+                min-height: 100vh;
                 overflow: hidden !important;
+                position: relative !important;
             }
         }
     </style>
     <script>
       // ROBUST API KEY PERSISTENCE
-      // 1. Ensure process.env exists (polyfill)
       window.process = window.process || {};
       window.process.env = window.process.env || {};
       
-      // 2. Check LocalStorage for saved key
       const storedKey = localStorage.getItem('gemini_api_key');
       
-      // 3. If found, FORCE it into process.env
       if (storedKey && storedKey.trim() !== "") {
         window.process.env.API_KEY = storedKey.trim();
         console.log("Gemini API Key restored from storage.");
       } else {
-         // Initialize as empty string if nothing stored
          if (!window.process.env.API_KEY) {
             window.process.env.API_KEY = "";
          }

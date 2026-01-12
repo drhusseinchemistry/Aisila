@@ -74,11 +74,25 @@
         }
     </style>
     <script>
-      // Process Polyfill for Environment Variables
-      // Checks localStorage first to persist key across reloads
-      if (typeof process === "undefined") {
-        window.process = { env: { API_KEY: localStorage.getItem('gemini_api_key') || "" } };
+      // ROBUST API KEY PERSISTENCE
+      // 1. Ensure process.env exists (polyfill)
+      window.process = window.process || {};
+      window.process.env = window.process.env || {};
+      
+      // 2. Check LocalStorage for saved key
+      const storedKey = localStorage.getItem('gemini_api_key');
+      
+      // 3. If found, FORCE it into process.env
+      if (storedKey && storedKey.trim() !== "") {
+        window.process.env.API_KEY = storedKey.trim();
+        console.log("Gemini API Key restored from storage.");
+      } else {
+         // Initialize as empty string if nothing stored
+         if (!window.process.env.API_KEY) {
+            window.process.env.API_KEY = "";
+         }
       }
+
       // PDF.js Worker Configuration
       if (window.pdfjsLib) {
         window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -91,8 +105,8 @@
     "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
     "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
     "@google/genai": "https://esm.sh/@google/genai@^1.35.0",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/"
   }
 }
 </script>

@@ -28,6 +28,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const [isConnected, setIsConnected] = useState(false);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const imgInputRef = useRef<HTMLInputElement>(null);
+  const fontInputRef = useRef<HTMLInputElement>(null);
 
   // Check connection status on mount
   useEffect(() => {
@@ -43,18 +44,11 @@ const Sidebar: React.FC<SidebarProps> = ({
   const saveManualKey = () => {
       if (manualApiKey.trim().length > 10) {
           const key = manualApiKey.trim();
-          // 1. Save to persistent storage
           localStorage.setItem('gemini_api_key', key);
-          
-          // 2. Update runtime immediately (shim for current session)
           // @ts-ignore
           if (!window.process) window.process = { env: {} };
           // @ts-ignore
-          if (!window.process.env) window.process.env = {};
-          // @ts-ignore
           window.process.env.API_KEY = key;
-          
-          // 3. Reload to ensure the index.html script picks it up cleanly at boot
           alert("پەیوەندی سەرکەوتوو بوو! (Connected Successfully)");
           window.location.reload();
       } else {
@@ -125,34 +119,13 @@ const Sidebar: React.FC<SidebarProps> = ({
                      className="w-full bg-slate-800 border border-slate-700 text-white text-xs p-3 rounded-xl focus:outline-none focus:border-blue-500 placeholder-slate-500 font-mono"
                    />
                </div>
-               <button 
-                onClick={saveManualKey}
-                className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl text-xs font-black transition shadow-lg shadow-blue-900/50 flex items-center justify-center gap-2"
-               >
+               <button onClick={saveManualKey} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl text-xs font-black transition shadow-lg shadow-blue-900/50 flex items-center justify-center gap-2">
                  Save & Connect
                </button>
-               
-               <div className="text-center pt-2">
-                   <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer" className="text-[10px] text-slate-500 hover:text-blue-400 underline decoration-slate-600">
-                       Get API Key Here
-                   </a>
-               </div>
             </div>
           ) : (
             <div className="relative z-10 space-y-3 animate-in fade-in duration-300">
-                <div className="bg-white/60 rounded-xl p-4 border border-green-100 flex items-center gap-3">
-                    <div className="bg-green-100 p-2 rounded-lg">
-                        <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    </div>
-                    <div>
-                        <p className="text-xs font-bold text-gray-700">پەیوەست بووە</p>
-                        <p className="text-[10px] text-gray-400">ئێستا AI ئامادەیە بۆ بەکارهێنان</p>
-                    </div>
-                </div>
-                <button 
-                    onClick={removeKey}
-                    className="w-full bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 py-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-2"
-                >
+                <button onClick={removeKey} className="w-full bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 py-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-2">
                     Disconnect (پچڕاندن)
                 </button>
             </div>
@@ -190,12 +163,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                   <input type="number" value={pdfRange.to} onChange={e => setPdfRange({...pdfRange, to: parseInt(e.target.value)})} className="w-full border-2 rounded-xl p-2 text-sm font-bold bg-white" />
                 </div>
               </div>
-              
               <div className="space-y-1">
                   <label className="text-[10px] font-black text-gray-400 block mb-1">شێواز (بیرکاری، کیمیا، هەلبژارتن...)</label>
                   <textarea value={pdfStyle} onChange={(e) => setPdfStyle(e.target.value)} placeholder="بۆ نموونە: بیرکاری پۆلا ١٢..." className="w-full border-2 border-blue-100 rounded-2xl p-4 text-xs font-bold focus:ring-4 focus:ring-blue-100 outline-none min-h-[80px] resize-none" />
               </div>
-
               <button onClick={onGenerateFromPdf} className="w-full bg-blue-600 text-white py-4 rounded-2xl text-xs font-black shadow-xl shadow-blue-100 hover:bg-blue-700 active:scale-95 transition">دروستکردنا پسیاران ب AI</button>
             </div>
           )}
@@ -211,11 +182,30 @@ const Sidebar: React.FC<SidebarProps> = ({
           {/* Design Controls */}
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <label className="text-[11px] font-black text-gray-400 mb-3 block uppercase tracking-widest">رەنگێ سەرەکی</label>
-              <div className="flex items-center gap-4">
-                <input type="color" value={settings.primaryColor} onChange={(e) => updateSettings({ primaryColor: e.target.value })} className="w-12 h-12 rounded-2xl border-none p-0 overflow-hidden cursor-pointer shadow-md" />
-                <span className="text-xs font-black text-gray-500">{settings.primaryColor}</span>
-              </div>
+               <div className="flex gap-4">
+                 <div className="flex-1">
+                    <label className="text-[11px] font-black text-gray-400 mb-3 block uppercase tracking-widest">رەنگێ سەرەکی</label>
+                    <div className="flex items-center gap-3">
+                        <input type="color" value={settings.primaryColor} onChange={(e) => updateSettings({ primaryColor: e.target.value })} className="w-10 h-10 rounded-xl border-none p-0 overflow-hidden cursor-pointer shadow-sm" />
+                        <span className="text-[10px] font-black text-gray-400">Theme</span>
+                    </div>
+                 </div>
+                 <div className="flex-1">
+                    <label className="text-[11px] font-black text-gray-400 mb-3 block uppercase tracking-widest">رەنگێ فۆنتی</label>
+                    <div className="flex items-center gap-3">
+                        <input type="color" value={settings.fontColor} onChange={(e) => updateSettings({ fontColor: e.target.value })} className="w-10 h-10 rounded-xl border-none p-0 overflow-hidden cursor-pointer shadow-sm" />
+                        <span className="text-[10px] font-black text-gray-400">Text</span>
+                    </div>
+                 </div>
+               </div>
+            </div>
+
+            <div className="col-span-2 pt-2 pb-2 border-t border-b border-dashed border-gray-200">
+               <label className="text-[11px] font-black text-gray-400 mb-2 block uppercase tracking-widest">فۆنتێ تایبەت</label>
+               <button onClick={() => fontInputRef.current?.click()} className="w-full py-3 bg-gray-100 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-200 transition text-center border-2 border-transparent hover:border-gray-300">
+                 {settings.customFontUrl ? "فۆنت هاتە گۆڕین (Click to change)" : "ئەپلۆدکرنا فۆنتی (.ttf/.otf)"}
+               </button>
+               <input type="file" ref={fontInputRef} className="hidden" accept=".ttf,.otf,.woff,.woff2" onChange={onUploadFont} />
             </div>
 
             <div>

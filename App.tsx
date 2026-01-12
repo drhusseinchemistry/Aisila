@@ -23,14 +23,14 @@ const App: React.FC = () => {
 
   const [settings, setSettings] = useState<EditorSettings>({
     paperSize: PaperSize.A4,
-    fontSize: 16,
-    fontColor: '#1e293b',
+    fontSize: 14,
+    fontColor: '#000000',
     primaryColor: '#2563eb',
-    lineHeight: 1.8,
+    lineHeight: 1.6,
     teacherName: '',
     customFontUrl: undefined,
-    choiceSpacing: 12,
-    questionGap: 40
+    choiceSpacing: 10,
+    questionGap: 30
   });
 
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -103,7 +103,6 @@ const App: React.FC = () => {
       }
 
       setUploadProgress(60);
-      // Fix: Removed apiKey argument
       const { sections: newSections } = await generateQuestionsFromImages(base64Pages, pdfStyle);
       
       if (newSections && newSections.length > 0) {
@@ -127,7 +126,11 @@ const App: React.FC = () => {
     let currentCharCount = 0;
 
     allSections.forEach(section => {
-      const sectionLength = section.content.length + section.title.length + 300; // Buffer for math/LaTeX
+      // Estimate height based on settings
+      const fontSizeMultiplier = settings.fontSize / 14; 
+      const spacing = settings.questionGap / 20;
+      const sectionLength = (section.content.length + section.title.length + 100) * fontSizeMultiplier + (spacing * 50);
+
       if (currentCharCount + sectionLength > charsPerPage && currentPage.length > 0) {
         result.push(currentPage);
         currentPage = [section];
@@ -148,12 +151,15 @@ const App: React.FC = () => {
     if (!text.trim()) return;
     setLoading(true);
     try {
-      // Fix: Removed apiKey argument
       const { sections: newSections } = await processTextToSections(text);
       setSections(newSections);
     } catch (error: any) {
       alert(`خەلەتەک پەیدابوو: ${error.message}`);
     } finally { setLoading(false); }
+  };
+
+  const handleUpdateSection = (id: string, newContent: string) => {
+    setSections(prev => prev.map(sec => sec.id === id ? { ...sec, content: newContent } : sec));
   };
 
   return (
@@ -167,7 +173,7 @@ const App: React.FC = () => {
             setLoading(true);
             try {
               const src = await generateExplanatoryImage(desc);
-              if (src) setFloatingImages(prev => [...prev, { id: Math.random().toString(), src, x: 200, y: 300, width: 350, height: 350, pageIndex: 0 }]);
+              if (src) setFloatingImages(prev => [...prev, { id: Math.random().toString(), src, x: 100, y: 300, width: 300, height: 300, pageIndex: 0 }]);
             } catch (err: any) {
               alert("Error generating image: " + err.message);
             }
@@ -180,7 +186,7 @@ const App: React.FC = () => {
               const reader = new FileReader();
               reader.onload = (event) => {
                 if (event.target?.result) {
-                  setFloatingImages(prev => [...prev, { id: Math.random().toString(), src: event.target!.result as string, x: 200, y: 300, width: 300, height: 300, pageIndex: 0 }]);
+                  setFloatingImages(prev => [...prev, { id: Math.random().toString(), src: event.target!.result as string, x: 100, y: 300, width: 300, height: 300, pageIndex: 0 }]);
                 }
               };
               reader.readAsDataURL(file);
@@ -243,9 +249,14 @@ const App: React.FC = () => {
         <div className="flex flex-col items-center pb-20" id="malzama-print-area">
           {pages.map((pageSections, i) => (
             <Page 
-              key={i} index={i} sections={pageSections} settings={settings} floatingImages={floatingImages}
+              key={i} 
+              index={i} 
+              sections={pageSections} 
+              settings={settings} 
+              floatingImages={floatingImages}
               onImageMove={(id, x, y) => setFloatingImages(prev => prev.map(img => img.id === id ? { ...img, x, y } : img))}
               onImageResize={(id, width, height) => setFloatingImages(prev => prev.map(img => img.id === id ? { ...img, width, height } : img))}
+              onSectionUpdate={handleUpdateSection}
             />
           ))}
         </div>

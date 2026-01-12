@@ -28,6 +28,17 @@ const Sidebar: React.FC<SidebarProps> = ({
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const imgInputRef = useRef<HTMLInputElement>(null);
 
+  const handleApiKeyConnect = async () => {
+    // @ts-ignore
+    if (window.aistudio && window.aistudio.openSelectKey) {
+        // @ts-ignore
+        await window.aistudio.openSelectKey();
+        window.location.reload();
+    } else {
+        alert("تێبینی: لەبەر هۆکاری پاراستن (Security)، تکایە API Key راستەوخۆ لە ڕێکخستنەکانی سێرڤەر (Environment Variables) زیاد بکە بە ناوی 'API_KEY'.\n\nئەگەر لەسەر کۆمپیوتەری خۆت کار دەکەیت، دەتوانیت لە فایلی .env دابنێیت.");
+    }
+  };
+
   if (!isOpen) {
     return (
       <div className="no-print fixed top-6 right-6 z-50">
@@ -50,7 +61,29 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-8 space-y-10 no-scrollbar">
+      <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar">
+        
+        {/* API CONNECTION SECTION (New) */}
+        <section className="bg-slate-900 p-5 rounded-[24px] border border-slate-800 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600 blur-[60px] opacity-20 pointer-events-none group-hover:opacity-30 transition-opacity"></div>
+          
+          <div className="flex items-center justify-between mb-4 relative z-10">
+            <div className="flex items-center gap-2">
+                <div className={`w-2.5 h-2.5 rounded-full ${process.env.API_KEY ? 'bg-green-500 shadow-[0_0_10px_#22c55e]' : 'bg-red-500 shadow-[0_0_10px_#ef4444] animate-pulse'}`}></div>
+                <h3 className="text-xs font-black text-slate-300 uppercase tracking-widest">Google AI Status</h3>
+            </div>
+            {process.env.API_KEY ? <span className="text-[10px] text-green-500 font-bold">Connected</span> : <span className="text-[10px] text-red-500 font-bold">No Key</span>}
+          </div>
+          
+          <button 
+            onClick={handleApiKeyConnect}
+            className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white py-3 rounded-2xl text-xs font-black transition flex items-center justify-center gap-2 relative z-10"
+          >
+             <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
+             {process.env.API_KEY ? "Refresh Connection" : "Connect API Key"}
+          </button>
+        </section>
+
         {/* PDF SECTION */}
         <section className="bg-blue-50/50 p-5 rounded-[24px] border border-blue-100">
           <div className="flex items-center gap-3 mb-4">

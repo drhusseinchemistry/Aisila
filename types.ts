@@ -19,6 +19,12 @@ export interface MalzamaSection {
   id: string;
   title: string;
   content: string;
+  // New properties for floating text boxes
+  isFloating?: boolean;
+  pageIndex?: number;
+  x?: number;
+  y?: number;
+  width?: number;
 }
 
 export interface EditorSettings {
@@ -29,6 +35,6 @@ export interface EditorSettings {
   lineHeight: number;
   teacherName: string;
   customFontUrl?: string;
-  choiceSpacing: number; // New: spacing between options
-  questionGap: number;   // New: spacing between questions
+  choiceSpacing: number;
+  questionGap: number;
 }

@@ -1,18 +1,19 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Page from './components/Page';
 import { EditorSettings, PaperSize, MalzamaSection, FloatingImage } from './types';
-// Fix: Removed generateQuestionsFromPdfText which was not exported from geminiService
 import { processTextToSections, generateExplanatoryImage, chatWithAI, generateQuestionsFromImages } from './services/geminiService';
 
 const App: React.FC = () => {
   const [sections, setSections] = useState<MalzamaSection[]>([]);
-  const [pages, setPages] = useState<MalzamaSection[][]>([]);
+  const [pages, setPages] = useState<{flow: MalzamaSection[], floating: MalzamaSection[]}[]>([]);
   const [floatingImages, setFloatingImages] = useState<FloatingImage[]>([]);
   const [loading, setLoading] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [showChat, setShowChat] = useState(false);
   const [chatHistory, setChatHistory] = useState<{role: 'user'|'ai', text: string}[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [targetPageIndex, setTargetPageIndex] = useState<number>(0);
   
   // PDF specific state
   const [pdfDoc, setPdfDoc] = useState<any>(null);
@@ -91,7 +92,7 @@ const App: React.FC = () => {
         for (let i = start; i <= end; i++) {
           setUploadProgress(10 + Math.floor(((i - start + 1) / (end - start + 1)) * 40));
           const page = await pdfDoc.getPage(i);
-          const viewport = page.getViewport({ scale: 2.5 }); // Higher scale for better OCR
+          const viewport = page.getViewport({ scale: 2.5 }); 
           const canvas = document.createElement('canvas');
           const context = canvas.getContext('2d');
           canvas.height = viewport.height;
@@ -119,29 +120,53 @@ const App: React.FC = () => {
     }
   };
 
+  // Improved Pagination logic to separate Floating items from Flow items
   const paginate = useCallback((allSections: MalzamaSection[]) => {
     const charsPerPage = settings.paperSize === PaperSize.A4 ? 1800 : settings.paperSize === PaperSize.A5 ? 900 : 1600;
-    const result: MalzamaSection[][] = [];
-    let currentPage: MalzamaSection[] = [];
+    
+    // 1. Separate fixed layout sections (isFloating) from auto-flow sections
+    const flowSections = allSections.filter(s => !s.isFloating);
+    const floatingSections = allSections.filter(s => s.isFloating);
+
+    const result: {flow: MalzamaSection[], floating: MalzamaSection[]}[] = [];
+    let currentFlowPage: MalzamaSection[] = [];
     let currentCharCount = 0;
 
-    allSections.forEach(section => {
-      // Estimate height based on settings
+    // 2. Paginate Flow Sections
+    flowSections.forEach(section => {
       const fontSizeMultiplier = settings.fontSize / 14; 
       const spacing = settings.questionGap / 20;
       const sectionLength = (section.content.length + section.title.length + 100) * fontSizeMultiplier + (spacing * 50);
 
-      if (currentCharCount + sectionLength > charsPerPage && currentPage.length > 0) {
-        result.push(currentPage);
-        currentPage = [section];
+      if (currentCharCount + sectionLength > charsPerPage && currentFlowPage.length > 0) {
+        result.push({ flow: currentFlowPage, floating: [] });
+        currentFlowPage = [section];
         currentCharCount = sectionLength;
       } else {
-        currentPage.push(section);
+        currentFlowPage.push(section);
         currentCharCount += sectionLength;
       }
     });
+    if (currentFlowPage.length > 0) result.push({ flow: currentFlowPage, floating: [] });
 
-    if (currentPage.length > 0) result.push(currentPage);
+    // 3. Distribute Floating Sections to their pages
+    // Ensure we have enough pages for floating items with high pageIndex
+    const maxFloatingPage = Math.max(...floatingSections.map(s => s.pageIndex || 0), -1);
+    while (result.length <= maxFloatingPage) {
+        result.push({ flow: [], floating: [] });
+    }
+
+    floatingSections.forEach(fs => {
+        const pIndex = fs.pageIndex || 0;
+        if (result[pIndex]) {
+            result[pIndex].floating.push(fs);
+        } else {
+            // Should be covered by while loop above, but safety check
+            const newPage = { flow: [], floating: [fs] };
+            result[pIndex] = newPage; 
+        }
+    });
+
     setPages(result);
   }, [settings.paperSize, settings.fontSize, settings.lineHeight, settings.questionGap]);
 
@@ -152,7 +177,7 @@ const App: React.FC = () => {
     setLoading(true);
     try {
       const { sections: newSections } = await processTextToSections(text);
-      setSections(newSections);
+      setSections(prev => [...prev, ...newSections]);
     } catch (error: any) {
       alert(`خەلەتەک پەیدابوو: ${error.message}`);
     } finally { setLoading(false); }
@@ -162,8 +187,55 @@ const App: React.FC = () => {
     setSections(prev => prev.map(sec => sec.id === id ? { ...sec, content: newContent } : sec));
   };
 
+  const handleSectionMove = (id: string, x: number, y: number) => {
+      setSections(prev => prev.map(sec => sec.id === id ? { ...sec, x, y } : sec));
+  };
+
+  const addTextToPage = (pageIndex: number) => {
+     const newSection: MalzamaSection = {
+         id: Math.random().toString(),
+         title: "Box",
+         content: "نڤیسینا نوو لێرە...",
+         isFloating: true,
+         pageIndex: pageIndex,
+         x: 100,
+         y: 200,
+         width: 400
+     };
+     setSections(prev => [...prev, newSection]);
+  };
+
+  const handleImageUploadForPage = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          if (event.target?.result) {
+             setFloatingImages(prev => [...prev, { 
+                 id: Math.random().toString(), 
+                 src: event.target!.result as string, 
+                 x: 100, 
+                 y: 200, 
+                 width: 300, 
+                 height: 300, 
+                 pageIndex: targetPageIndex 
+             }]);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+  };
+
+  const triggerImageUpload = (pageIndex: number) => {
+      setTargetPageIndex(pageIndex);
+      fileInputRef.current?.click();
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
+      {/* Hidden Global Input for Page-Specific Uploads */}
+      <input type="file" accept="image/*" ref={fileInputRef} className="hidden" onChange={handleImageUploadForPage} />
+
       <Sidebar 
         settings={settings} 
         updateSettings={(s) => setSettings(prev => ({ ...prev, ...s }))}
@@ -209,6 +281,16 @@ const App: React.FC = () => {
       />
 
       <main className="flex-1 overflow-y-auto p-12 relative no-scrollbar bg-slate-100/30">
+        <style>{`
+            @media print {
+                body, #root, main { 
+                    overflow: visible !important; 
+                    height: auto !important; 
+                }
+                .no-print { display: none !important; }
+            }
+        `}</style>
+
         {sections.length === 0 && !loading && (
           <div className="max-w-4xl mx-auto mt-20 p-16 bg-white rounded-[60px] shadow-2xl border-4 border-white no-print text-center transform transition-all hover:scale-[1.01]">
             <div className="w-24 h-24 bg-blue-600 rounded-[32px] mx-auto mb-10 flex items-center justify-center text-white text-5xl font-black shadow-2xl shadow-blue-200">A</div>
@@ -247,23 +329,27 @@ const App: React.FC = () => {
         )}
 
         <div className="flex flex-col items-center pb-20" id="malzama-print-area">
-          {pages.map((pageSections, i) => (
+          {pages.map((pageData, i) => (
             <Page 
               key={i} 
               index={i} 
-              sections={pageSections} 
+              sections={pageData.flow}
+              floatingSections={pageData.floating} 
               settings={settings} 
               floatingImages={floatingImages}
               onImageMove={(id, x, y) => setFloatingImages(prev => prev.map(img => img.id === id ? { ...img, x, y } : img))}
               onImageResize={(id, width, height) => setFloatingImages(prev => prev.map(img => img.id === id ? { ...img, width, height } : img))}
               onSectionUpdate={handleUpdateSection}
+              onSectionMove={handleSectionMove}
+              onAddTextToPage={() => addTextToPage(i)}
+              onAddImageToPage={() => triggerImageUpload(i)}
             />
           ))}
         </div>
         
         {pages.length > 0 && (
              <div className="text-center no-print pb-20">
-                 <button onClick={() => setSections(prev => [...prev, { id: Math.random().toString(), title: "پسیارەکا نوو", content: "ل ڤێرە پسیارێ بنڤیسە..." }])} className="px-12 py-5 bg-white text-gray-900 rounded-[30px] font-black shadow-2xl border-4 border-white hover:bg-gray-50 transition-all transform hover:scale-105 active:scale-95">+ زێدەکرنا پسیارەکا نوی</button>
+                 <button onClick={() => setSections(prev => [...prev, { id: Math.random().toString(), title: "پسیارەکا نوو", content: "ل ڤێرە پسیارێ بنڤیسە..." }])} className="px-12 py-5 bg-white text-gray-900 rounded-[30px] font-black shadow-2xl border-4 border-white hover:bg-gray-50 transition-all transform hover:scale-105 active:scale-95">+ زێدەکرنا پسیارەکا نوی (بۆ کۆتایی)</button>
              </div>
         )}
       </main>
@@ -297,7 +383,6 @@ const App: React.FC = () => {
                     e.currentTarget.value = '';
                     setChatHistory(prev => [...prev, { role: 'user', text: q }]);
                     try {
-                      // Fix: Removed apiKey argument
                       const answer = await chatWithAI(q);
                       if (answer) setChatHistory(prev => [...prev, { role: 'ai', text: answer }]);
                     } catch (err: any) {

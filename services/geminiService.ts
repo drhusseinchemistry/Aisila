@@ -1,7 +1,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Initialize the GoogleGenAI client with the API key from environment variables.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Helper to initialize AI client lazily. 
+// This prevents the app from crashing on load if the API Key is missing in the browser environment.
+const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const SYSTEM_PROMPT_CORE = `
 تۆ مامۆستایەکی شارەزا و داهێنەری د دانانا ئەسیلەیان دا.
@@ -26,6 +27,7 @@ const SYSTEM_PROMPT_CORE = `
 `;
 
 export const generateQuestionsFromImages = async (base64Images: string[], style: string) => {
+  const ai = getAI();
   const imageParts = base64Images.map(img => ({ inlineData: { mimeType: "image/jpeg", data: img } }));
   const textPart = { 
     text: `${SYSTEM_PROMPT_CORE}\n\nتەماشای ڤان وێنەیان بکە و پسیارێن نوو و "سەروبەر" ب شێوازێ "${style || 'پسیارێن گشتی'}" دروست بکە.` 
@@ -59,6 +61,7 @@ export const generateQuestionsFromImages = async (base64Images: string[], style:
 };
 
 export const processTextToSections = async (text: string) => {
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: `${SYSTEM_PROMPT_CORE}\n\nئەڤێ نڤیسینێ وەکی مژار بکاربینە و پسیارێن نوو و رێکخستی ژێ دروست بکە (تکایە دڵنیابە لە نوسینی LaTeX بۆ بیرکاری بە شێوەیەکێ دروست): \n\n ${text}`,
@@ -87,6 +90,7 @@ export const processTextToSections = async (text: string) => {
 };
 
 export const generateExplanatoryImage = async (prompt: string) => {
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash-image',
     contents: { parts: [{ text: `High quality academic illustration for examination: ${prompt}` }] },
@@ -99,6 +103,7 @@ export const generateExplanatoryImage = async (prompt: string) => {
 };
 
 export const chatWithAI = async (question: string) => {
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: question,

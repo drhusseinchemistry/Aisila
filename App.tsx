@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Page from './components/Page';
@@ -166,9 +165,12 @@ const App: React.FC = () => {
           const desc = window.prompt("وێنە دەربارەی چی بیت؟ (ب ئینگلیزی)");
           if (desc) {
             setLoading(true);
-            // Fix: Removed apiKey argument
-            const src = await generateExplanatoryImage(desc);
-            if (src) setFloatingImages(prev => [...prev, { id: Math.random().toString(), src, x: 200, y: 300, width: 350, height: 350, pageIndex: 0 }]);
+            try {
+              const src = await generateExplanatoryImage(desc);
+              if (src) setFloatingImages(prev => [...prev, { id: Math.random().toString(), src, x: 200, y: 300, width: 350, height: 350, pageIndex: 0 }]);
+            } catch (err: any) {
+              alert("Error generating image: " + err.message);
+            }
             setLoading(false);
           }
         }}
@@ -283,9 +285,13 @@ const App: React.FC = () => {
                     const q = e.currentTarget.value;
                     e.currentTarget.value = '';
                     setChatHistory(prev => [...prev, { role: 'user', text: q }]);
-                    // Fix: Removed apiKey argument
-                    const answer = await chatWithAI(q);
-                    if (answer) setChatHistory(prev => [...prev, { role: 'ai', text: answer }]);
+                    try {
+                      // Fix: Removed apiKey argument
+                      const answer = await chatWithAI(q);
+                      if (answer) setChatHistory(prev => [...prev, { role: 'ai', text: answer }]);
+                    } catch (err: any) {
+                      setChatHistory(prev => [...prev, { role: 'ai', text: "Error: " + err.message }]);
+                    }
                   }
               }} />
             </div>

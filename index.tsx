@@ -11,11 +11,9 @@ interface ErrorBoundaryState {
   error: any;
 }
 
-class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   // Explicitly define state property to fix TypeScript error
   public state: ErrorBoundaryState = { hasError: false, error: null };
-  // Declare props explicitly to fix TypeScript error regarding missing 'props' property
-  declare props: Readonly<ErrorBoundaryProps>;
 
   static getDerivedStateFromError(error: any) {
     return { hasError: true, error };

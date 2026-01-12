@@ -15,6 +15,10 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   // Explicitly define state property to fix TypeScript error
   public state: ErrorBoundaryState = { hasError: false, error: null };
 
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+  }
+
   static getDerivedStateFromError(error: any) {
     return { hasError: true, error };
   }

@@ -2,25 +2,19 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Page from './components/Page';
 import { EditorSettings, PaperSize, MalzamaSection, FloatingImage } from './types';
+// Fix: Removed generateQuestionsFromPdfText which was not exported from geminiService
 import { processTextToSections, generateExplanatoryImage, chatWithAI, generateQuestionsFromImages } from './services/geminiService';
 
 const App: React.FC = () => {
-  // All sections (both flow and floating)
-  const [allSections, setAllSections] = useState<MalzamaSection[]>([]);
-  
-  // Computed pages for "Flow" content only
-  const [flowPages, setFlowPages] = useState<MalzamaSection[][]>([]);
-  
+  const [sections, setSections] = useState<MalzamaSection[]>([]);
+  const [pages, setPages] = useState<MalzamaSection[][]>([]);
   const [floatingImages, setFloatingImages] = useState<FloatingImage[]>([]);
   const [loading, setLoading] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [showChat, setShowChat] = useState(false);
   const [chatHistory, setChatHistory] = useState<{role: 'user'|'ai', text: string}[]>([]);
   
-  // Track which page the user is currently interacting with
-  const [activePageIndex, setActivePageIndex] = useState(0);
-
-  // PDF state
+  // PDF specific state
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [pdfInfo, setPdfInfo] = useState<{ fileName: string, totalPages: number } | null>(null);
   const [pdfRange, setPdfRange] = useState({ from: 1, to: 1 });
@@ -38,51 +32,6 @@ const App: React.FC = () => {
     choiceSpacing: 10,
     questionGap: 30
   });
-
-  // Calculate pages only for sections that are NOT floating
-  const paginate = useCallback((sections: MalzamaSection[]) => {
-    // Filter out floating sections, they handle their own pages
-    const flowContent = sections.filter(s => !s.isFloating);
-
-    const charsPerPage = settings.paperSize === PaperSize.A4 ? 1800 : settings.paperSize === PaperSize.A5 ? 900 : 1600;
-    const result: MalzamaSection[][] = [];
-    let currentPage: MalzamaSection[] = [];
-    let currentCharCount = 0;
-
-    flowContent.forEach(section => {
-      const fontSizeMultiplier = settings.fontSize / 14; 
-      const spacing = settings.questionGap / 20;
-      const sectionLength = (section.content.length + section.title.length + 100) * fontSizeMultiplier + (spacing * 50);
-
-      if (currentCharCount + sectionLength > charsPerPage && currentPage.length > 0) {
-        result.push(currentPage);
-        currentPage = [section];
-        currentCharCount = sectionLength;
-      } else {
-        currentPage.push(section);
-        currentCharCount += sectionLength;
-      }
-    });
-
-    if (currentPage.length > 0) result.push(currentPage);
-    
-    // Ensure at least one page exists if we have floating items but no flow items
-    if (result.length === 0 && (sections.some(s => s.isFloating) || floatingImages.length > 0)) {
-        result.push([]);
-    }
-    
-    setFlowPages(result);
-  }, [settings.paperSize, settings.fontSize, settings.lineHeight, settings.questionGap, floatingImages.length]);
-
-  useEffect(() => { paginate(allSections); }, [allSections, settings, paginate]);
-
-  // Determine total pages count (max of flow pages or floating item pages)
-  const totalPagesCount = Math.max(
-    flowPages.length, 
-    ...allSections.map(s => (s.pageIndex || 0) + 1),
-    ...floatingImages.map(img => (img.pageIndex || 0) + 1),
-    1
-  );
 
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -129,17 +78,20 @@ const App: React.FC = () => {
     if (!pdfDoc) return;
     setLoading(true);
     setUploadProgress(10);
+    
     try {
       const base64Pages: string[] = [];
+      
       if (pdfDoc.isImage) {
         base64Pages.push(pdfDoc.base64);
       } else {
         const start = Math.max(1, pdfRange.from);
         const end = Math.min(pdfDoc.numPages, pdfRange.to);
+
         for (let i = start; i <= end; i++) {
           setUploadProgress(10 + Math.floor(((i - start + 1) / (end - start + 1)) * 40));
           const page = await pdfDoc.getPage(i);
-          const viewport = page.getViewport({ scale: 2.5 }); 
+          const viewport = page.getViewport({ scale: 2.5 }); // Higher scale for better OCR
           const canvas = document.createElement('canvas');
           const context = canvas.getContext('2d');
           canvas.height = viewport.height;
@@ -149,10 +101,12 @@ const App: React.FC = () => {
           base64Pages.push(base64);
         }
       }
+
       setUploadProgress(60);
       const { sections: newSections } = await generateQuestionsFromImages(base64Pages, pdfStyle);
+      
       if (newSections && newSections.length > 0) {
-        setAllSections(prev => [...prev, ...newSections]);
+        setSections(prev => [...prev, ...newSections]);
       } else {
         alert("AI نەشییا چ پسیاران ژ ڤان وێنەیان دروست کەت.");
       }
@@ -165,49 +119,48 @@ const App: React.FC = () => {
     }
   };
 
+  const paginate = useCallback((allSections: MalzamaSection[]) => {
+    const charsPerPage = settings.paperSize === PaperSize.A4 ? 1800 : settings.paperSize === PaperSize.A5 ? 900 : 1600;
+    const result: MalzamaSection[][] = [];
+    let currentPage: MalzamaSection[] = [];
+    let currentCharCount = 0;
+
+    allSections.forEach(section => {
+      // Estimate height based on settings
+      const fontSizeMultiplier = settings.fontSize / 14; 
+      const spacing = settings.questionGap / 20;
+      const sectionLength = (section.content.length + section.title.length + 100) * fontSizeMultiplier + (spacing * 50);
+
+      if (currentCharCount + sectionLength > charsPerPage && currentPage.length > 0) {
+        result.push(currentPage);
+        currentPage = [section];
+        currentCharCount = sectionLength;
+      } else {
+        currentPage.push(section);
+        currentCharCount += sectionLength;
+      }
+    });
+
+    if (currentPage.length > 0) result.push(currentPage);
+    setPages(result);
+  }, [settings.paperSize, settings.fontSize, settings.lineHeight, settings.questionGap]);
+
+  useEffect(() => { paginate(sections); }, [sections, settings, paginate]);
+
   const handleTextSubmit = async (text: string) => {
     if (!text.trim()) return;
     setLoading(true);
     try {
       const { sections: newSections } = await processTextToSections(text);
-      setAllSections(newSections);
+      setSections(newSections);
     } catch (error: any) {
       alert(`خەلەتەک پەیدابوو: ${error.message}`);
     } finally { setLoading(false); }
   };
 
-  const handleUpdateSection = (id: string, updates: Partial<MalzamaSection>) => {
-    setAllSections(prev => prev.map(sec => sec.id === id ? { ...sec, ...updates } : sec));
+  const handleUpdateSection = (id: string, newContent: string) => {
+    setSections(prev => prev.map(sec => sec.id === id ? { ...sec, content: newContent } : sec));
   };
-
-  const handleConvertToFloating = (id: string, currentPageIndex: number) => {
-    setAllSections(prev => prev.map(sec => {
-        if (sec.id === id) {
-            return {
-                ...sec,
-                isFloating: true,
-                pageIndex: currentPageIndex,
-                x: 50, // Default start X
-                y: 100, // Default start Y
-                width: 600
-            };
-        }
-        return sec;
-    }));
-  };
-
-  const handleConvertToFlow = (id: string) => {
-     setAllSections(prev => prev.map(sec => {
-        if (sec.id === id) {
-            const { isFloating, pageIndex, x, y, width, ...rest } = sec;
-            return rest;
-        }
-        return sec;
-    }));
-  };
-
-  // Generate pages array based on total count
-  const renderablePages = Array.from({ length: Math.max(flowPages.length, totalPagesCount) || 1 }, (_, i) => i);
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">
@@ -220,8 +173,7 @@ const App: React.FC = () => {
             setLoading(true);
             try {
               const src = await generateExplanatoryImage(desc);
-              // Use activePageIndex to place image on current page
-              if (src) setFloatingImages(prev => [...prev, { id: Math.random().toString(), src, x: 100, y: 100, width: 300, height: 300, pageIndex: activePageIndex }]);
+              if (src) setFloatingImages(prev => [...prev, { id: Math.random().toString(), src, x: 100, y: 300, width: 300, height: 300, pageIndex: 0 }]);
             } catch (err: any) {
               alert("Error generating image: " + err.message);
             }
@@ -234,8 +186,7 @@ const App: React.FC = () => {
               const reader = new FileReader();
               reader.onload = (event) => {
                 if (event.target?.result) {
-                   // Use activePageIndex
-                  setFloatingImages(prev => [...prev, { id: Math.random().toString(), src: event.target!.result as string, x: 100, y: 100, width: 300, height: 300, pageIndex: activePageIndex }]);
+                  setFloatingImages(prev => [...prev, { id: Math.random().toString(), src: event.target!.result as string, x: 100, y: 300, width: 300, height: 300, pageIndex: 0 }]);
                 }
               };
               reader.readAsDataURL(file);
@@ -258,7 +209,7 @@ const App: React.FC = () => {
       />
 
       <main className="flex-1 overflow-y-auto p-12 relative no-scrollbar bg-slate-100/30">
-        {allSections.length === 0 && floatingImages.length === 0 && !loading && (
+        {sections.length === 0 && !loading && (
           <div className="max-w-4xl mx-auto mt-20 p-16 bg-white rounded-[60px] shadow-2xl border-4 border-white no-print text-center transform transition-all hover:scale-[1.01]">
             <div className="w-24 h-24 bg-blue-600 rounded-[32px] mx-auto mb-10 flex items-center justify-center text-white text-5xl font-black shadow-2xl shadow-blue-200">A</div>
             <h2 className="text-5xl font-black text-gray-900 mb-6 tracking-tight">چێکرنا ئەسیلا ب شێوازەکێ نوی</h2>
@@ -296,28 +247,23 @@ const App: React.FC = () => {
         )}
 
         <div className="flex flex-col items-center pb-20" id="malzama-print-area">
-          {renderablePages.map((pageIndex) => (
-            <div key={pageIndex} onMouseEnter={() => setActivePageIndex(pageIndex)}>
-                <Page 
-                index={pageIndex} 
-                sections={flowPages[pageIndex] || []}
-                floatingSections={allSections.filter(s => s.isFloating && s.pageIndex === pageIndex)}
-                floatingImages={floatingImages}
-                settings={settings} 
-                onImageMove={(id, x, y) => setFloatingImages(prev => prev.map(img => img.id === id ? { ...img, x, y } : img))}
-                onImageResize={(id, width, height) => setFloatingImages(prev => prev.map(img => img.id === id ? { ...img, width, height } : img))}
-                onSectionUpdate={handleUpdateSection}
-                onConvertToFloating={handleConvertToFloating}
-                onConvertToFlow={handleConvertToFlow}
-                />
-            </div>
+          {pages.map((pageSections, i) => (
+            <Page 
+              key={i} 
+              index={i} 
+              sections={pageSections} 
+              settings={settings} 
+              floatingImages={floatingImages}
+              onImageMove={(id, x, y) => setFloatingImages(prev => prev.map(img => img.id === id ? { ...img, x, y } : img))}
+              onImageResize={(id, width, height) => setFloatingImages(prev => prev.map(img => img.id === id ? { ...img, width, height } : img))}
+              onSectionUpdate={handleUpdateSection}
+            />
           ))}
         </div>
         
-        {renderablePages.length > 0 && (
-             <div className="text-center no-print pb-20 space-x-4">
-                 <button onClick={() => setAllSections(prev => [...prev, { id: Math.random().toString(), title: "پسیارەکا نوو", content: "ل ڤێرە پسیارێ بنڤیسە..." }])} className="px-12 py-5 bg-white text-gray-900 rounded-[30px] font-black shadow-2xl border-4 border-white hover:bg-gray-50 transition-all transform hover:scale-105 active:scale-95">+ زێدەکرنا پسیارەکا نوی (بۆ لیستی)</button>
-                 <button onClick={() => setAllSections(prev => [...prev, { id: Math.random().toString(), title: "پسیارەکا نوو", content: "پسیارا بۆکس...", isFloating: true, pageIndex: activePageIndex, x: 100, y: 100, width: 400 }])} className="px-12 py-5 bg-blue-600 text-white rounded-[30px] font-black shadow-2xl shadow-blue-200 hover:bg-blue-700 transition-all transform hover:scale-105 active:scale-95">+ زێدەکرنا پسیار (وەک بۆکس)</button>
+        {pages.length > 0 && (
+             <div className="text-center no-print pb-20">
+                 <button onClick={() => setSections(prev => [...prev, { id: Math.random().toString(), title: "پسیارەکا نوو", content: "ل ڤێرە پسیارێ بنڤیسە..." }])} className="px-12 py-5 bg-white text-gray-900 rounded-[30px] font-black shadow-2xl border-4 border-white hover:bg-gray-50 transition-all transform hover:scale-105 active:scale-95">+ زێدەکرنا پسیارەکا نوی</button>
              </div>
         )}
       </main>
@@ -338,7 +284,7 @@ const App: React.FC = () => {
                   <div className={`max-w-[85%] p-8 rounded-[40px] shadow-sm ${msg.role === 'user' ? 'bg-white text-gray-900' : 'bg-blue-600 text-white font-bold'}`}>
                     <div className="text-lg leading-relaxed">{msg.text}</div>
                     {msg.role === 'ai' && (
-                      <button onClick={() => { setAllSections(prev => [...prev, { id: Math.random().toString(), title: "بەرسڤا AI", content: msg.text }]); setShowChat(false); }} className="flex items-center gap-3 mt-6 px-6 py-3 bg-white/10 rounded-2xl text-xs font-black tracking-widest hover:bg-white/20 transition uppercase">+ زێدە بکە بۆ ئەسیلەیێ</button>
+                      <button onClick={() => { setSections(prev => [...prev, { id: Math.random().toString(), title: "بەرسڤا AI", content: msg.text }]); setShowChat(false); }} className="flex items-center gap-3 mt-6 px-6 py-3 bg-white/10 rounded-2xl text-xs font-black tracking-widest hover:bg-white/20 transition uppercase">+ زێدە بکە بۆ ئەسیلەیێ</button>
                     )}
                   </div>
                 </div>
@@ -351,6 +297,7 @@ const App: React.FC = () => {
                     e.currentTarget.value = '';
                     setChatHistory(prev => [...prev, { role: 'user', text: q }]);
                     try {
+                      // Fix: Removed apiKey argument
                       const answer = await chatWithAI(q);
                       if (answer) setChatHistory(prev => [...prev, { role: 'ai', text: answer }]);
                     } catch (err: any) {

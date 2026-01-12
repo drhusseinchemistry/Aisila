@@ -1,11 +1,31 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Initialize AI client lazily to prevent crash on load if API_KEY is missing/empty.
-const getAiClient = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error("Gemini API Key is missing. Please check your configuration.");
+// Helper to initialize AI client lazily. 
+// We explicitly check localStorage and window.process to ensure the key is found 
+// even if the bundler replaces process.env.API_KEY with undefined.
+const getAI = () => {
+  let apiKey = "";
+  
+  // 1. Try standard process.env (if defined/injected)
+  if (typeof process !== "undefined" && process.env && process.env.API_KEY) {
+    apiKey = process.env.API_KEY;
   }
+
+  // 2. Try window.process shim (from index.html)
+  if (!apiKey && typeof window !== "undefined") {
+    // @ts-ignore
+    apiKey = window.process?.env?.API_KEY;
+  }
+
+  // 3. Try localStorage directly (most reliable for this app)
+  if (!apiKey && typeof window !== "undefined") {
+    apiKey = localStorage.getItem('gemini_api_key') || "";
+  }
+
+  if (!apiKey) {
+    throw new Error("API Key نەهاتیە دیتن. تکایە ژ سایدباری Connect بکە.");
+  }
+
   return new GoogleGenAI({ apiKey });
 };
 
@@ -32,7 +52,7 @@ const SYSTEM_PROMPT_CORE = `
 `;
 
 export const generateQuestionsFromImages = async (base64Images: string[], style: string) => {
-  const ai = getAiClient();
+  const ai = getAI();
   const imageParts = base64Images.map(img => ({ inlineData: { mimeType: "image/jpeg", data: img } }));
   const textPart = { 
     text: `${SYSTEM_PROMPT_CORE}\n\nتەماشای ڤان وێنەیان بکە و پسیارێن نوو و "سەروبەر" ب شێوازێ "${style || 'پسیارێن گشتی'}" دروست بکە.` 
@@ -66,7 +86,7 @@ export const generateQuestionsFromImages = async (base64Images: string[], style:
 };
 
 export const processTextToSections = async (text: string) => {
-  const ai = getAiClient();
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: `${SYSTEM_PROMPT_CORE}\n\nئەڤێ نڤیسینێ وەکی مژار بکاربینە و پسیارێن نوو و رێکخستی ژێ دروست بکە (تکایە دڵنیابە لە نوسینی LaTeX بۆ بیرکاری بە شێوەیەکێ دروست): \n\n ${text}`,
@@ -95,7 +115,7 @@ export const processTextToSections = async (text: string) => {
 };
 
 export const generateExplanatoryImage = async (prompt: string) => {
-  const ai = getAiClient();
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash-image',
     contents: { parts: [{ text: `High quality academic illustration for examination: ${prompt}` }] },
@@ -108,7 +128,7 @@ export const generateExplanatoryImage = async (prompt: string) => {
 };
 
 export const chatWithAI = async (question: string) => {
-  const ai = getAiClient();
+  const ai = getAI();
   const response = await ai.models.generateContent({
     model: "gemini-3-flash-preview",
     contents: question,

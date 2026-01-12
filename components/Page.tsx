@@ -3,15 +3,12 @@ import { EditorSettings, PaperSize, MalzamaSection, FloatingImage } from '../typ
 
 interface PageProps {
   index: number;
-  sections: MalzamaSection[]; // Flow sections
-  floatingSections: MalzamaSection[]; // Floating text sections
+  sections: MalzamaSection[];
   settings: EditorSettings;
   floatingImages: FloatingImage[];
   onImageMove: (id: string, x: number, y: number) => void;
   onImageResize: (id: string, w: number, h: number) => void;
-  onSectionUpdate: (id: string, updates: Partial<MalzamaSection>) => void;
-  onConvertToFloating: (id: string, pageIdx: number) => void;
-  onConvertToFlow: (id: string) => void;
+  onSectionUpdate?: (id: string, newContent: string) => void;
 }
 
 // Helper component to render individual math expressions safely
@@ -46,15 +43,12 @@ const LatexRenderer: React.FC<{ latex: string; displayMode: boolean }> = ({ late
 
 const Page: React.FC<PageProps> = ({ 
   index, 
-  sections,
-  floatingSections, 
+  sections, 
   settings, 
   floatingImages,
   onImageMove,
   onImageResize,
-  onSectionUpdate,
-  onConvertToFloating,
-  onConvertToFlow
+  onSectionUpdate
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [tempContent, setTempContent] = useState("");
@@ -69,7 +63,7 @@ const Page: React.FC<PageProps> = ({
 
   const fontStyle = {
     fontFamily: settings.customFontUrl ? '"CustomFont", "Vazirmatn", sans-serif' : '"Vazirmatn", sans-serif',
-    color: settings.fontColor, 
+    color: settings.fontColor, // Applied font color
     direction: 'rtl' as const
   };
 
@@ -101,7 +95,7 @@ const Page: React.FC<PageProps> = ({
     const choiceLabels = sanitized.match(/[أبجد]\)/g);
     
     if (!choiceLabels) {
-        return <div className="whitespace-pre-wrap text-justify leading-relaxed break-words">{parseAndRender(sanitized)}</div>;
+        return <div className="whitespace-pre-wrap text-justify leading-relaxed">{parseAndRender(sanitized)}</div>;
     }
 
     const firstLabel = choiceLabels[0];
@@ -127,12 +121,12 @@ const Page: React.FC<PageProps> = ({
 
     return (
       <div className="flex flex-col w-full">
-        <div className="mb-4 leading-relaxed text-justify break-words">{parseAndRender(questionPart)}</div>
+        <div className="mb-4 leading-relaxed text-justify">{parseAndRender(questionPart)}</div>
         <div className="grid grid-cols-2 gap-x-12 gap-y-2 w-full mt-2">
           {choiceLabels.map((label, i) => (
-            <div key={i} className="flex items-start gap-3 border-r-4 border-transparent hover:border-slate-100 pr-2 transition-all break-words" style={{ marginBottom: `${settings.choiceSpacing}px` }}>
+            <div key={i} className="flex items-start gap-3 border-r-4 border-transparent hover:border-slate-100 pr-2 transition-all" style={{ marginBottom: `${settings.choiceSpacing}px` }}>
               <span className="font-black opacity-80 bg-blue-50 w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0 mt-1" style={{ color: settings.primaryColor }}>{label.replace(')', '')}</span>
-              <span className="pt-1 leading-relaxed break-words" style={{ color: settings.fontColor }}>{parseAndRender(choiceParts[i] || '')}</span>
+              <span className="pt-1 leading-relaxed" style={{ color: settings.fontColor }}>{parseAndRender(choiceParts[i] || '')}</span>
             </div>
           ))}
         </div>
@@ -140,44 +134,12 @@ const Page: React.FC<PageProps> = ({
     );
   };
 
-  const handleDragStart = (e: React.MouseEvent, id: string, type: 'image'|'text', initialX: number, initialY: number) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      const startX = e.clientX;
-      const startY = e.clientY;
-
-      document.body.style.cursor = 'grabbing';
-      document.body.style.userSelect = 'none';
-
-      const move = (mE: MouseEvent) => {
-          mE.preventDefault();
-          const dx = mE.clientX - startX;
-          const dy = mE.clientY - startY;
-          
-          if (type === 'image') {
-              onImageMove(id, initialX + dx, initialY + dy);
-          } else {
-              onSectionUpdate(id, { x: initialX + dx, y: initialY + dy });
-          }
-      };
-
-      const stop = () => {
-          window.removeEventListener('mousemove', move);
-          window.removeEventListener('mouseup', stop);
-          document.body.style.cursor = '';
-          document.body.style.userSelect = '';
-      };
-
-      window.addEventListener('mousemove', move);
-      window.addEventListener('mouseup', stop);
-  };
-
   return (
     <div 
       className={`relative bg-white page-shadow mx-auto mb-12 overflow-hidden flex flex-col page-break ${getPageStyle()}`}
       style={fontStyle}
     >
+      {/* Inject custom font style if available */}
       {settings.customFontUrl && (
         <style>{`
           @font-face {
@@ -187,11 +149,9 @@ const Page: React.FC<PageProps> = ({
         `}</style>
       )}
 
-      {/* Header Background */}
       <div className="absolute inset-6 border-[1px] pointer-events-none opacity-10 z-0" style={{ borderColor: settings.primaryColor }} />
       <div className="absolute inset-8 border-[3px] pointer-events-none opacity-20 z-0" style={{ borderColor: settings.primaryColor }} />
 
-      {/* Header Content */}
       <div className="absolute top-10 left-12 right-12 flex justify-between items-end z-10 border-b-2 pb-6" style={{ borderColor: settings.primaryColor + '15' }}>
          <div className="flex flex-col items-start gap-1">
             <div className="text-[9px] font-black uppercase tracking-[0.2em] opacity-40">KRG Ministry of Education</div>
@@ -210,11 +170,12 @@ const Page: React.FC<PageProps> = ({
          </div>
       </div>
 
-      <div className="mt-48 px-16 flex-1 relative z-10 h-full">
-        {/* FLOW CONTENT (List) */}
-        <div className="space-y-0 w-full">
+      <div className="mt-48 px-16 flex-1 relative z-10">
+        <div className="space-y-0">
           {sections.map((section, idx) => (
-            <div key={section.id} className="relative group animate-in fade-in slide-in-from-bottom-2 duration-500 w-full" style={{ marginBottom: `${settings.questionGap}px` }}>
+            <div key={section.id} className="relative group animate-in fade-in slide-in-from-bottom-2 duration-500" style={{ marginBottom: `${settings.questionGap}px` }}>
+              
+              {/* Editing Mode */}
               {editingId === section.id ? (
                 <div className="relative z-50">
                    <textarea 
@@ -224,27 +185,26 @@ const Page: React.FC<PageProps> = ({
                      onChange={(e) => setTempContent(e.target.value)}
                      autoFocus
                      onBlur={() => {
-                        onSectionUpdate(section.id, { content: tempContent });
+                        if (onSectionUpdate) onSectionUpdate(section.id, tempContent);
                         setEditingId(null);
                      }}
                    />
+                   <div className="text-[10px] text-blue-500 mt-1">Click outside to save. Supports LaTeX ($...$)</div>
                 </div>
               ) : (
+                // Display Mode
                 <div 
                    className="flex items-start gap-6 cursor-pointer hover:bg-slate-50/80 p-2 -m-2 rounded-xl transition-colors border border-transparent hover:border-slate-100 relative group/item"
                    onClick={() => {
                        setEditingId(section.id);
                        setTempContent(section.content);
                    }}
+                   title="Click to edit text"
                 >
-                    <div className="absolute right-0 top-0 opacity-0 group-hover/item:opacity-100 flex gap-1 pointer-events-none group-hover/item:pointer-events-auto">
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); onConvertToFloating(section.id, index); }}
-                            className="bg-blue-600 text-white text-[10px] px-2 py-1 rounded-bl-lg font-bold hover:bg-blue-700"
-                            title="Convert to Movable Box (Unlock)"
-                        >
-                            Unlock / جوڵاندن
-                        </button>
+                    <div 
+                        className="absolute right-0 top-0 opacity-0 group-hover/item:opacity-100 bg-blue-600 text-white text-[10px] px-2 py-1 rounded-bl-lg pointer-events-none font-bold"
+                    >
+                        دەستکاری (Edit)
                     </div>
                      <div 
                       className="mt-1 w-12 h-10 rounded-xl text-white font-black text-sm shadow-lg flex items-center justify-center flex-shrink-0"
@@ -252,81 +212,55 @@ const Page: React.FC<PageProps> = ({
                      >
                       {idx + 1}
                     </div>
-                     <div className="flex-1 w-full pointer-events-none break-words overflow-hidden">
+                     <div className="flex-1 w-full pointer-events-none">
                        <div 
-                        style={{ fontSize: `${settings.fontSize}px`, lineHeight: settings.lineHeight }}
-                        className="font-bold w-full break-words"
+                        style={{ 
+                          fontSize: `${settings.fontSize}px`, 
+                          lineHeight: settings.lineHeight,
+                        }}
+                        className="font-bold w-full"
                       >
                         {formatContent(section.content)}
                       </div>
                      </div>
                 </div>
               )}
+              
+              {idx < sections.length - 1 && (
+                <div className="mt-10 flex justify-center pointer-events-none">
+                  <div className="w-1/4 h-[1px] bg-gradient-to-r from-transparent via-slate-200 to-transparent" />
+                </div>
+              )}
             </div>
           ))}
         </div>
 
-        {/* FLOATING TEXT BOXES (Manual Position) */}
-        {floatingSections.map((section) => (
-             <div 
-                key={section.id}
-                className="absolute cursor-move border-2 border-dashed border-blue-200 hover:border-blue-500 bg-white/90 p-4 rounded-xl group z-40 shadow-sm hover:shadow-lg transition-all"
-                style={{ 
-                    left: section.x || 50, 
-                    top: section.y || 100, 
-                    width: section.width || 400 
-                }}
-                onMouseDown={(e) => handleDragStart(e, section.id, 'text', section.x || 50, section.y || 100)}
-             >
-                 {/* Resize Handle */}
-                 <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-8 bg-blue-100 rounded-full cursor-ew-resize opacity-0 group-hover:opacity-100 flex items-center justify-center"
-                     onMouseDown={(e) => {
-                         e.stopPropagation();
-                         e.preventDefault();
-                         const startW = section.width || 400;
-                         const startX = e.clientX;
-                         const move = (me: MouseEvent) => {
-                             onSectionUpdate(section.id, { width: Math.max(200, startW + (me.clientX - startX)) });
-                         };
-                         const stop = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', stop); };
-                         window.addEventListener('mousemove', move);
-                         window.addEventListener('mouseup', stop);
-                     }}
-                 >
-                     <div className="w-0.5 h-4 bg-blue-400"></div>
-                 </div>
-
-                 <div className="absolute top-0 right-0 -mt-6 opacity-0 group-hover:opacity-100 flex gap-2">
-                     <button onClick={() => onConvertToFlow(section.id)} className="bg-gray-800 text-white text-[10px] px-2 py-1 rounded font-bold">Lock / لیست</button>
-                 </div>
-                 
-                 {editingId === section.id ? (
-                     <textarea 
-                     className="w-full h-auto min-h-[100px] p-2 bg-transparent focus:outline-none"
-                     style={{ fontFamily: 'monospace', direction: 'rtl' }}
-                     value={tempContent}
-                     onChange={(e) => setTempContent(e.target.value)}
-                     autoFocus
-                     onBlur={() => { onSectionUpdate(section.id, { content: tempContent }); setEditingId(null); }}
-                     onMouseDown={(e) => e.stopPropagation()} 
-                   />
-                 ) : (
-                     <div onDoubleClick={() => { setEditingId(section.id); setTempContent(section.content); }}>
-                         <div style={{ fontSize: `${settings.fontSize}px`, lineHeight: settings.lineHeight }} className="font-bold w-full break-words">
-                            {formatContent(section.content)}
-                         </div>
-                     </div>
-                 )}
-             </div>
-        ))}
-
-        {/* FLOATING IMAGES */}
         {floatingImages.filter(img => img.pageIndex === index).map(img => (
           <div
             key={img.id}
             className="absolute cursor-move border-2 border-transparent hover:border-blue-500 z-50 group transition-all"
             style={{ left: img.x, top: img.y, width: img.width, height: img.height }}
-            onMouseDown={(e) => handleDragStart(e, img.id, 'image', img.x, img.y)}
+            onMouseDown={(e) => {
+              // Crucial: Prevent default to stop browser native drag/selection which moves the page
+              e.preventDefault();
+              e.stopPropagation();
+              
+              const startX = e.clientX - img.x;
+              const startY = e.clientY - img.y;
+              
+              const move = (mE: MouseEvent) => {
+                  mE.preventDefault();
+                  onImageMove(img.id, mE.clientX - startX, mE.clientY - startY);
+              };
+              
+              const stop = () => { 
+                  window.removeEventListener('mousemove', move); 
+                  window.removeEventListener('mouseup', stop); 
+              };
+              
+              window.addEventListener('mousemove', move);
+              window.addEventListener('mouseup', stop);
+            }}
           >
             <img src={img.src} className="w-full h-full object-cover rounded-2xl shadow-xl bg-white p-1.5 border border-slate-100 pointer-events-none select-none" alt="Illustration" />
             <div 

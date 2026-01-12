@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ku" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>دەستکاریکەری PDF - وەشانی ئۆفلاین</title>
+    <link rel="stylesheet" href="pdf-editor.css">
+</head>
+<body>
+    <div id="loader" class="loader-overlay" style="display: none;">
+        <div class="loader-text">...تکایە چاڤەرێ بە</div>
+    </div>
+    <div id="autosave-status"></div>
+
+    <!-- ZÊDEKIRÎ: لیستا ئایکونان کو ل سەر لاپەری دیار دبن -->
+    <div id="context-menu" class="context-menu" style="display: none;">
+        <button class="tool-btn" data-tool="image" title="ئینانا وێنەی">🖼️</button>
+        <button class="tool-btn" data-tool="text" title="نڤیسین">T</button>
+        <button class="tool-btn" data-tool="underline" title="بن-هێلکرن"><u>U</u></button>
+    </div>
+
+    <div class="toolbar">
+        <div class="tool-group file-group">
+            <label for="pdf-upload" class="upload-label" title="فایلەکا PDF ڤەکە">📤 <span class="btn-text">ڤەکرنا PDF</span></label>
+            <input type="file" id="pdf-upload" accept=".pdf" hidden>
+            
+            <button id="load-project-btn" title="پرۆژەیەکا پاشەکەوتکری (.json) ڤەکە">📂 <span class="btn-text">ڤەکرنا پرۆژەی</span></button>
+            <input type="file" id="project-upload" accept=".json" hidden>
+
+            <label for="font-upload" class="upload-label" title="فۆنتەکا TTF/OTF باربکە">🔠 <span class="btn-text">گوهۆڕینا فۆنتی</span></label>
+            <input type="file" id="font-upload" accept=".ttf,.otf" hidden>
+            
+            <button id="save-project-btn" title="دەستکارییان وەک پرۆژە (.json) پاشەکەوت بکە">💾 <span class="btn-text">پاشەکەوتکرن</span></button>
+            <button id="export-pdf-btn" title="وەک PDFا داویێ یا yekgirtî هناردە بکە">📥 <span class="btn-text">هناردەکرن</span></button>
+        </div>
+
+        <div class="tool-group page-ops-group">
+            <button id="add-blank-page-btn" title="لاپەرەکێ سپی زێدەبکە">📄+</button>
+            <button id="import-pages-btn" title="ئینانا لاپەران ژ PDFەکا دی">📥+</button>
+            <input type="file" id="import-pdf-upload" accept=".pdf" hidden>
+        </div>
+        
+        <!-- ZÊDEKIRÎ: بەشێ Undo/Redo -->
+        <div class="tool-group history-group">
+            <button id="undo-btn" title="پاشڤەزڤرین (Undo)" disabled>↪️</button>
+            <button id="redo-btn" title="پێشڤەبرن (Redo)" disabled>↩️</button>
+        </div>
+
+        <div class="tool-group">
+            <button class="tool-btn" data-tool="select" title="دیارکرن و جوڵاندن">🖐️</button>
+            <button class="tool-btn active" data-tool="pen" title="قەلەم (نڤیسینا ئازاد)">✏️</button>
+            <button class="tool-btn" data-tool="text-highlighter" title="هایلایتکرنا نڤیسینێ">Aa</button>
+            <button class="tool-btn" data-tool="line" title="هێلا ڕاست">\</button>
+            <button class="tool-btn" data-tool="underline" title="بن-هێلکرن"><u>U</u></button>
+            <button class="tool-btn" data-tool="rect" title="چوارگۆشە">⬜</button>
+            <button class="tool-btn" data-tool="oval" title="بازنە">⚪</button>
+            <button class="tool-btn" data-tool="text" title="نڤیسین">T</button>
+            <button class="tool-btn" data-tool="image" title="ئینانا وێنەی">🖼️</button>
+            <input type="file" id="image-upload" accept="image/*" hidden>
+            <button id="delete-btn" title="تشتێن دیارکری ژێببە">🗑️</button>
+        </div>
+
+        <div class="settings">
+            <label for="color-picker">ڕەنگ:</label>
+            <input type="color" id="color-picker" value="#FFD700">
+            <label for="stroke-width" id="stroke-label">ستووری:</label>
+            <input type="range" id="stroke-width" min="1" max="50" value="15">
+            <span id="stroke-value">15</span>
+        </div>
+
+        <div class="tool-group navigation-group">
+            <input type="number" id="page-number-input" placeholder="ژمارا لاپەری" min="1">
+            <button id="go-to-page-btn">بچە</button>
+        </div>
+    </div>
+
+    <div id="main-container">
+        <div id="page-thumbnails-container"></div>
+        <div id="pdf-container"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fontkit@1.9.0/dist/fontkit.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script> 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    
+    <script src="pdf-editor.js"></script>
+</body>
+</html>

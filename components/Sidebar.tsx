@@ -241,6 +241,12 @@ const Sidebar: React.FC<SidebarProps> = ({
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
             چات دگەل زیرەکیێ
           </button>
+
+          {/* New Link to Manual Editor */}
+          <a href="pdf-editor.html" target="_blank" rel="noopener noreferrer" className="w-full py-4 border-2 border-slate-800 bg-slate-800 text-white rounded-2xl font-black text-xs hover:bg-slate-700 transition flex items-center justify-center gap-2 shadow-lg transform hover:-translate-y-1">
+             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+             دەستکاریکەری PDF (Manual Editor)
+          </a>
         </section>
       </div>
 
